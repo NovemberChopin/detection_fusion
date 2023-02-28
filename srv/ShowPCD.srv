@@ -1,0 +1,5 @@
+# 请求内容为bool型，表示是否需要展示pcd数据
+string show_pcd
+---
+# 0 表示更改成功，1表示失败
+int16 status

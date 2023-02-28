@@ -1,0 +1,18 @@
+%YAML:1.0
+---
+image_width:  1280
+image_height: 720
+rotation_matrix: !!opencv-matrix
+   rows: 3
+   cols: 3
+   dt: d
+   data: [
+        0.0125533,   -0.999895, -0.00720356,
+        0.00669269,  0.00728786,   -0.999951,
+        0.999899,   0.0125045,  0.00678336 ]
+trans_matrix: !!opencv-matrix
+   rows: 3
+   cols: 1
+   dt: d
+   data: [ 0.0357196, 0.131417, -0.221038]
+
