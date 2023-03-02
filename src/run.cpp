@@ -5,8 +5,8 @@ Run::Run() {
 
   this->projector = new Projector();
   this->objectD = new ObjectDetection();
-  // hasDetecEvent[4] = true;      // 测试，index 为 4 的事件开启
-  this->interval = 4;
+  hasDetecEvent[4] = true;      // 测试，index 为 4 的事件开启
+  this->interval = 5;
   this->fps = 15;
   image_size = cv::Size(1280, 720);
   this->camera_coord = cv::Point3f(0.0, 0.0, 0.0);
@@ -107,27 +107,6 @@ void Run::Callback(const sensor_msgs::ImageConstPtr &msg_img,
   }
   // 執行物體檢測
   this->processOD(fixed_img, this->interval);
-
-  /**
-   * 开启某一个事件：
-   *    hasDetecEvent[i] = true
-   * 关闭某一个事件：
-   *    hasDetecEvent[i] = false
-   *    detec_event_index[i] == -1
-   * 
-  */
-  // 图像帧计数器
-  for (int i=0; i<hasDetecEvent.size(); i++) {
-    if (hasDetecEvent[i] == true) {
-      // 如果事件开启，则相应的计数器开始计数
-      detec_event_index[i] = (detec_event_index[i] + 1) % event_detec_interval;
-      std::cout << "---: i: " << i << " detec_event_index: " << detec_event_index[i] << std::endl;
-    }
-  }
-  
-  cv::Mat detecImg;
-  fixed_img.copyTo(detecImg);
-  this->detecEvent(detecImg);          // 进行交通事件检测
 
   cv::Mat fusion_frame;
   if (this->show_pcd) {
@@ -240,7 +219,9 @@ void Run::detecEvent(cv::Mat &image) {
   if (this->hasDetecEvent[3] && detec_event_index[3] == 0) {
     DetectionInfo *detec_info =  objectD->detecRes;
     for (int i=0; i < detec_info->track_classIds.size(); i++) {
+      if (detec_info->track_classIds[i] > 0) {
 
+      }
     }
   }
 
@@ -341,20 +322,47 @@ void Run::processOD(cv::Mat &image, int interval) {
           detec_info->location.push_back(wd_cur);
       }
     }
+    
+    
+    /**
+     * 开启某一个事件：
+     *    hasDetecEvent[i] = true
+     * 关闭某一个事件：
+     *    hasDetecEvent[i] = false
+     *    detec_event_index[i] == -1
+    */
+    // 图像帧计数器
+    for (int i=0; i<hasDetecEvent.size(); i++) {
+      if (hasDetecEvent[i] == true) {
+        // 如果事件开启，则相应的计数器开始计数
+        detec_event_index[i] = (detec_event_index[i] + 1) % event_detec_interval;
+        std::cout << "---: i: " << i << " detec_event_index: " << detec_event_index[i] << std::endl;
+      }
+    }
+    
     // 创建跟踪算法对象
     this->objectD->CreateTracker(image);
-    this->cur_bbox_size = detec_info->track_boxes.size();
+    this->cur_track_bboxs.clear();
 
-  } else {
-    // 跟踪算法
-    this->objectD->multiTracker->update(image);
-    // std::vector<cv::Rect2d> bboxs;
-    // bboxs.assign(objectD->multiTracker->getObjects().begin(),
-    //               objectD->multiTracker->getObjects().end());
-    // if (bboxs.size() == this->cur_bbox_size) {
-    //   detec_info->track_boxes.assign(bboxs.begin(), bboxs.end());
-    // }
+  } else {  /// 跟踪算法模块
     
+    this->objectD->multiTracker->update(image);
+    // 如果当前跟踪的物体和检测的物体数量相同
+    if (this->objectD->multiTracker->getObjects().size() == detec_info->track_boxes.size()) {
+      vector<Rect2d> bboxs;
+      bboxs.assign(objectD->multiTracker->getObjects().begin(),
+                    objectD->multiTracker->getObjects().end());
+      this->cur_track_bboxs.push_back(bboxs);
+      // std::cout << "cur_track_bboxs.size(): " << this->cur_track_bboxs.size() << std::endl;
+    }
+    // 如果当前次迭代为该周期内最后一次跟踪
+    // 1. 更新速度、距离、坐标信息
+    // 2. 检测事件
+    if (this->cur_track_bboxs.size() == (this->interval-1)) {
+      cv::Mat detecImg;
+      image.copyTo(detecImg);
+      this->detecEvent(detecImg);          // 进行交通事件检测
+    }
   }
   
   detec_info->index = (detec_info->index + 1) % 25;

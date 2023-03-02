@@ -37,6 +37,8 @@
 
 #include <time.h>
 
+using namespace cv;
+using namespace std;
 using namespace sensor_msgs;
 using namespace message_filters;
 
@@ -64,10 +66,10 @@ private:
   std::string extrinsic_path = "/home/js/catkin/jiujiang/src/detection_fusion/config/trans_matrix.yml";
   bool show_pcd = false;            // 是否在视频中显示点云
 
-  int cur_bbox_size;                // 当前检测到的对象个数
+  vector<vector<Rect2d>> cur_track_bboxs;       // 两次检测之间跟踪算法返回的的数据
 
   // 事件检测参数
-  int event_detec_interval = 100;                                   // 事件检测间隔（帧）
+  int event_detec_interval = 10;                                    // 事件检测周期（10表示进行10次物体检测后进行一次事件检测）
   std::vector<bool> hasDetecEvent = std::vector<bool>(5, false);		// 对应五种事件是否开始检测
 	std::vector<int> detec_event_index = std::vector<int>(5, -1);			// 每个事件检测的间隔
 
