@@ -5,7 +5,7 @@ Run::Run() {
 
   this->projector = new Projector();
   this->objectD = new ObjectDetection();
-  // hasDetecEvent[4] = true;      // 测试，index 为 4 的事件开启
+  hasDetecEvent[1] = true;      // 测试，index 为 4 的事件开启
   this->interval = 5;
   this->fps = 15;
   image_size = cv::Size(1280, 720);
@@ -210,7 +210,34 @@ void Run::detecEvent(cv::Mat &image) {
 
 
   // 交通拥堵
-
+  if (this->hasDetecEvent[1] && detec_event_index[1] == 0) {
+    int left_car = 0;
+    int right_car = 0;
+    bool flag = false;
+    for (int i=0; i < detec_info->track_classIds.size(); i++) {
+      // 如果物体id大于0 : car. 且速度小于10
+      if (detec_info->track_classIds[i] > 0 && abs(detec_info->track_speeds[i]) < 10) {
+        // 计算检测框的质心
+        double c_x = detec_info->track_boxes[i].x + detec_info->track_boxes[i].width / 2;
+        double c_y = detec_info->track_boxes[i].y + detec_info->track_boxes[i].height / 2;
+        cv::Point2d c_point = cv::Point2d(c_x, c_y);
+        if (this->left_road_roi.contains(c_point)) left_car += 1;
+        if (this->right_road_roi.contains(c_point)) right_car += 1;
+      }
+    }
+    // TODO: 当左侧道路有超过三辆车，就认为交通拥挤。右侧同理
+    if (left_car > 3) {
+      cv::rectangle(image, this->left_road_roi, Scalar(255, 50, 50), 2);
+      flag = true;
+    }
+    if (right_car > 3) {
+      cv::rectangle(image, this->right_road_roi, Scalar(255, 50, 50), 2);
+      flag = true;
+    }
+    if (flag) {
+      this->PubEventTopic(1, "交通拥挤", "高", "正确", image);
+    }
+  }
 
   // 异常变道
 
