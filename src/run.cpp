@@ -205,7 +205,7 @@ cv::Point2f Run::getPixelPoint(Rect2d &rect, int type) {
 
 
 void Run::detecEvent(cv::Mat &image) {
-
+  DetectionInfo *detec_info =  objectD->detecRes;
   // 交通逆行
 
 
@@ -217,11 +217,17 @@ void Run::detecEvent(cv::Mat &image) {
 
   // 异常停车事件
   if (this->hasDetecEvent[3] && detec_event_index[3] == 0) {
-    DetectionInfo *detec_info =  objectD->detecRes;
+    bool flag = false;
     for (int i=0; i < detec_info->track_classIds.size(); i++) {
-      if (detec_info->track_classIds[i] > 0) {
-
+      // TODO: 这里直接将速度小于 0.2 的车视为停车。
+      // 后面可以优化判断条件，根据最近几次的位置来判断是否
+      if (detec_info->track_classIds[i] > 0 && abs(detec_info->track_speeds[i]) < 0.2) {
+        flag = true;
+        cv::rectangle(image, detec_info->track_boxes[i], Scalar(255, 50, 50), 2);
       }
+    }
+    if (flag) {
+      this->PubEventTopic(3, "异常停车", "高", "正确", image);
     }
   }
 
@@ -229,11 +235,10 @@ void Run::detecEvent(cv::Mat &image) {
   // 弱势交通参与者闯入  默认检测整个画面
   if (hasDetecEvent[4] && detec_event_index[4] == 0) {
     bool flag = false;
-    DetectionInfo *detec_info =  objectD->detecRes;
     for (int i=0; i < detec_info->track_classIds.size(); i++) {
       if (detec_info->track_classIds[i] == 0) {   // 如果物体id为 0: person
         flag = true;
-        cv::rectangle(image, detec_info->track_boxes[i], Scalar(255, 178, 50), 2);
+        cv::rectangle(image, detec_info->track_boxes[i], Scalar(255, 50, 50), 2);
       }
     }
     if (flag) {
