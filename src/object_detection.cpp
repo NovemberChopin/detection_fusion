@@ -17,9 +17,6 @@ ObjectDetection::ObjectDetection() {
 	net = readNetFromDarknet(modelConfiguration, modelWeights);
 	cout << "Using CPU device" << endl;
     net.setPreferableBackend(DNN_TARGET_CPU);
-
-    // // 创建跟踪对象
-    multiTracker = cv::MultiTracker::create();
 }
 
 ObjectDetection::~ObjectDetection() {
@@ -56,6 +53,22 @@ Ptr<Tracker> ObjectDetection::createTrackerByName(string trackerType)
         std::cout << " " << *it << endl;
     }
     return tracker;
+}
+
+
+void ObjectDetection::CreateTracker(cv::Mat &frame) {
+    delete this->multiTracker;      // 释放跟踪对象
+    this->multiTracker = new cv::MultiTracker();
+
+    std::vector<Ptr<cv::Tracker> > algorithms;
+    std::vector<cv::Rect2d> bboxs;
+    // 添加新的跟踪对象
+    for (int i=0; i<this->detecRes->track_boxes.size(); i++) {
+        algorithms.push_back(this->createTrackerByName(this->trackerType));
+        bboxs.push_back(detecRes->track_boxes[i]);
+    }
+    this->multiTracker->add(algorithms, frame, bboxs);
+    // std::cout << "begin create tracker: " << this->multiTracker->getObjects().size() << std::endl;
 }
 
 
@@ -116,7 +129,7 @@ void ObjectDetection::postprocess(Mat& frame, const vector<Mat>& outs)
 {
     vector<int> classIds;
     vector<float> confidences;
-    vector<Rect> boxes;
+    vector<Rect2d> boxes;
     
     for (size_t i = 0; i < outs.size(); ++i)
     {
@@ -154,7 +167,7 @@ void ObjectDetection::postprocess(Mat& frame, const vector<Mat>& outs)
     for (size_t i = 0; i < indices.size(); ++i)
     {
         int idx = indices[i];
-        Rect box = boxes[idx];
+        Rect2d box = boxes[idx];
         if(classIds[idx] == 0) {     // 只保存检测到的行人和车辆（class见resources/coco.names）
             detecRes->track_boxes.push_back(boxes[idx]);
             detecRes->track_classIds.push_back(classIds[idx]);

@@ -64,6 +64,8 @@ private:
   std::string extrinsic_path = "/home/js/catkin/jiujiang/src/detection_fusion/config/trans_matrix.yml";
   bool show_pcd = false;            // 是否在视频中显示点云
 
+  int cur_bbox_size;                // 当前检测到的对象个数
+
   // 事件检测参数
   int event_detec_interval = 100;                                   // 事件检测间隔（帧）
   std::vector<bool> hasDetecEvent = std::vector<bool>(5, false);		// 对应五种事件是否开始检测
@@ -91,7 +93,7 @@ public:
   void processOD(cv::Mat &image, int interval);           // 處理目標檢測函數
   void detecEvent(cv::Mat &image);                        // 交通事件检测事件
   cv::Point3f cameraToWorld(cv::Point2f point);           // 將圖像像素座標映射爲真實世界座標
-  cv::Point2f getPixelPoint(Rect &rect, int type);
+  cv::Point2f getPixelPoint(Rect2d &rect, int type);
 
   bool setShowPCD(detection_fusion::ShowPCD::Request &req,        // ShowPCD 服务回调函数
                   detection_fusion::ShowPCD::Response &res);

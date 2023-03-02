@@ -213,11 +213,11 @@ cv::Point3f Run::cameraToWorld(cv::Point2f point) {
  * @param type 返回质心:0或底部中心:1
  * @return cv::Point2f 
  */
-cv::Point2f Run::getPixelPoint(Rect &rect, int type) {
-    int x = rect.x;
-    int y = rect.y;
-    int width = rect.width;
-    int height = rect.height;
+cv::Point2f Run::getPixelPoint(Rect2d &rect, int type) {
+    double x = rect.x;
+    double y = rect.y;
+    double width = rect.width;
+    double height = rect.height;
     if (type == 0) {
         return cv::Point2f(x+width/2, y+height/2);   // 质心坐标
     }
@@ -237,6 +237,12 @@ void Run::detecEvent(cv::Mat &image) {
 
 
   // 异常停车事件
+  if (this->hasDetecEvent[3] && detec_event_index[3] == 0) {
+    DetectionInfo *detec_info =  objectD->detecRes;
+    for (int i=0; i < detec_info->track_classIds.size(); i++) {
+
+    }
+  }
 
 
   // 弱势交通参与者闯入  默认检测整个画面
@@ -335,13 +341,20 @@ void Run::processOD(cv::Mat &image, int interval) {
           detec_info->location.push_back(wd_cur);
       }
     }
-
-    // 执行事件检测模块
-    // if (this->hasDetecEvent)  this->detecEvent(image);
+    // 创建跟踪算法对象
+    this->objectD->CreateTracker(image);
+    this->cur_bbox_size = detec_info->track_boxes.size();
 
   } else {
-    // 跟蹤算法
-    // objectD->runTrackerModel(image);
+    // 跟踪算法
+    this->objectD->multiTracker->update(image);
+    // std::vector<cv::Rect2d> bboxs;
+    // bboxs.assign(objectD->multiTracker->getObjects().begin(),
+    //               objectD->multiTracker->getObjects().end());
+    // if (bboxs.size() == this->cur_bbox_size) {
+    //   detec_info->track_boxes.assign(bboxs.begin(), bboxs.end());
+    // }
+    
   }
   
   detec_info->index = (detec_info->index + 1) % 25;

@@ -21,8 +21,8 @@ using namespace std;
 struct DetectionInfo
 {
 	int index;							// 当前检测的帧的 index
-	vector<Rect> track_boxes_pre;		// 记录上一次的边框位置
-	vector<Rect> track_boxes;			// 当前帧检测到物体的边框位置
+	vector<Rect2d> track_boxes_pre;		// 记录上一次的边框位置
+	vector<Rect2d> track_boxes;			// 当前帧检测到物体的边框位置
 	vector<int> track_classIds;			// 当前帧检测物体的类别
 	vector<float> track_confidences;	// 当前帧检测物体的置信度
 	vector<float> track_speeds;
@@ -43,6 +43,8 @@ private:
 	float confThreshold = 0.5; // Confidence threshold
 	float nmsThreshold = 0.4;  // Non-maximum suppression threshold
 
+  std::string trackerType = "KCF";
+
 	std::string classesFile = "/home/js/catkin/jiujiang/src/detection_fusion/config/coco.names";
 
 	// cv::String modelConfiguration = "./src/mul_t/resources/yolov4-tiny.cfg";
@@ -56,7 +58,7 @@ public:
 
   DetectionInfo* detecRes;
 
-	Ptr<MultiTracker> multiTracker;
+  cv::MultiTracker *multiTracker = nullptr;
 
   ObjectDetection();
   ~ObjectDetection();
@@ -68,6 +70,7 @@ public:
 	void drawPred(int classId, float conf, float speed, float dist,
 					      int left, int top, int right, int bottom, Mat& frame);
 	// 物体跟踪相关函数
+  void CreateTracker(cv::Mat &frame);
 	void runTrackerModel(cv::Mat & frame);
 	Ptr<Tracker> createTrackerByName(string trackerType);
 
