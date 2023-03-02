@@ -96,7 +96,7 @@ public:
   void detecEvent(cv::Mat &image);                        // 交通事件检测事件
   cv::Point3f cameraToWorld(cv::Point2f point);           // 將圖像像素座標映射爲真實世界座標
   cv::Point2f getPixelPoint(Rect2d &rect, int type);
-
+  float getDistBetweenTwoDetec(int index);
   bool setShowPCD(detection_fusion::ShowPCD::Request &req,        // ShowPCD 服务回调函数
                   detection_fusion::ShowPCD::Response &res);
   bool setDetecEvent(detection_fusion::SetDetecEvent::Request &req,

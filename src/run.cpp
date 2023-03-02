@@ -5,7 +5,7 @@ Run::Run() {
 
   this->projector = new Projector();
   this->objectD = new ObjectDetection();
-  hasDetecEvent[4] = true;      // 测试，index 为 4 的事件开启
+  // hasDetecEvent[4] = true;      // 测试，index 为 4 的事件开启
   this->interval = 5;
   this->fps = 15;
   image_size = cv::Size(1280, 720);
@@ -272,7 +272,7 @@ std::string Run::getCurTime() {
 
 void Run::processOD(cv::Mat &image, int interval) {
   DetectionInfo *detec_info = this->objectD->detecRes;
-
+  vector<Rect2d> tmp_bboxs;
   if (detec_info->index % interval == 0) {
     detec_info->track_boxes_pre.clear();
     // 將當前幀檢測結果賦值給 track_boxes_pre
@@ -300,27 +300,27 @@ void Run::processOD(cv::Mat &image, int interval) {
       
     } else {
       // 只有前后两帧 bboxes 长度一样时
-      for (int i=0; i<detec_info->track_boxes.size(); i++) {
-        // 这里 type=1 表示返回底部中心坐标
-        cv::Point2f pre_pixel = getPixelPoint(detec_info->track_boxes_pre[i], 1);
-        cv::Point2f cur_pixel = getPixelPoint(detec_info->track_boxes[i], 1);
-        // 计算真实世界坐标
-        cv::Point3f wd_pre = cameraToWorld(pre_pixel);
-        cv::Point3f wd_cur = cameraToWorld(cur_pixel);
-        // 計算物體速度
-        float delta = sqrt(pow(wd_cur.x-wd_pre.x, 2) + pow(wd_cur.y-wd_pre.y, 2));
-        float speed = delta / float(interval / float(this->fps));
-        // 計算物體離相機的距離
-        float dist_pre = sqrt(pow(wd_pre.x-this->camera_coord.x, 2) + 
-                                pow(wd_pre.y-this->camera_coord.y, 2));
-        float dist = sqrt(pow(wd_cur.x-this->camera_coord.x, 2) + 
-                                pow(wd_cur.y-this->camera_coord.y, 2));
-        // 定义远离相机速度为正，靠近相机速度为负
-        if (dist < dist_pre) {speed *= -1;}
-          detec_info->track_speeds.push_back(speed);
-          detec_info->track_distances.push_back(dist);
-          detec_info->location.push_back(wd_cur);
-      }
+      // for (int i=0; i<detec_info->track_boxes.size(); i++) {
+      //   // 这里 type=1 表示返回底部中心坐标
+      //   cv::Point2f pre_pixel = getPixelPoint(detec_info->track_boxes_pre[i], 1);
+      //   cv::Point2f cur_pixel = getPixelPoint(detec_info->track_boxes[i], 1);
+      //   // 计算真实世界坐标
+      //   cv::Point3f wd_pre = cameraToWorld(pre_pixel);
+      //   cv::Point3f wd_cur = cameraToWorld(cur_pixel);
+      //   // 計算物體速度
+      //   float delta = sqrt(pow(wd_cur.x-wd_pre.x, 2) + pow(wd_cur.y-wd_pre.y, 2));
+      //   float speed = delta / float(interval / float(this->fps));
+      //   // 計算物體離相機的距離
+      //   float dist_pre = sqrt(pow(wd_pre.x-this->camera_coord.x, 2) + 
+      //                           pow(wd_pre.y-this->camera_coord.y, 2));
+      //   float dist = sqrt(pow(wd_cur.x-this->camera_coord.x, 2) + 
+      //                           pow(wd_cur.y-this->camera_coord.y, 2));
+      //   // 定义远离相机速度为正，靠近相机速度为负
+      //   if (dist < dist_pre) {speed *= -1;}
+      //     detec_info->track_speeds.push_back(speed);
+      //     detec_info->track_distances.push_back(dist);
+      //     detec_info->location.push_back(wd_cur);
+      // }
     }
     
     
@@ -343,32 +343,60 @@ void Run::processOD(cv::Mat &image, int interval) {
     // 创建跟踪算法对象
     this->objectD->CreateTracker(image);
     this->cur_track_bboxs.clear();
+    // 将当前检测到的Rect存入 this->cur_track_bboxs
+    tmp_bboxs.clear();
+    tmp_bboxs.assign(detec_info->track_boxes.begin(),
+                        detec_info->track_boxes.end());
+    this->cur_track_bboxs.push_back(tmp_bboxs);
 
   } else {  /// 跟踪算法模块
     
     this->objectD->multiTracker->update(image);
     // 如果当前跟踪的物体和检测的物体数量相同
     if (this->objectD->multiTracker->getObjects().size() == detec_info->track_boxes.size()) {
-      vector<Rect2d> bboxs;
-      bboxs.assign(objectD->multiTracker->getObjects().begin(),
+      tmp_bboxs.clear();
+      tmp_bboxs.assign(objectD->multiTracker->getObjects().begin(),
                     objectD->multiTracker->getObjects().end());
-      this->cur_track_bboxs.push_back(bboxs);
+      this->cur_track_bboxs.push_back(tmp_bboxs);
       // std::cout << "cur_track_bboxs.size(): " << this->cur_track_bboxs.size() << std::endl;
+      // 如果当前次迭代为该周期内最后一次跟踪
+      // 1. 更新速度、距离、坐标信息
+      // 2. 检测事件
+      if (this->cur_track_bboxs.size() == (this->interval-1)) {
+        detec_info->track_distances.clear();
+        detec_info->track_speeds.clear();
+        detec_info->location.clear();
+        for (int i=0; i<detec_info->track_boxes.size(); i++) {
+          // // 这里 type=1 表示返回底部中心坐标
+          cv::Point2f pre_pixel = getPixelPoint(this->cur_track_bboxs.front()[i], 1);
+          cv::Point2f cur_pixel = getPixelPoint(this->cur_track_bboxs.back()[i], 1);
+          // // 计算真实世界坐标
+          cv::Point3f wd_pre = cameraToWorld(pre_pixel);
+          cv::Point3f wd_cur = cameraToWorld(cur_pixel);
+
+          float delta = getDistBetweenTwoDetec(i);
+          float speed = delta / float(this->interval / float(fps));
+
+          // 计算物体离相机的距离
+          float dist_pre = sqrt(pow(wd_pre.x-this->camera_coord.x, 2) + 
+                                pow(wd_pre.y-this->camera_coord.y, 2));
+          float dist = sqrt(pow(wd_cur.x-this->camera_coord.x, 2) + 
+                                  pow(wd_cur.y-this->camera_coord.y, 2));
+          // 定义远离相机速度为正，靠近相机速度为负
+          if (dist < dist_pre) {speed *= -1;}
+          detec_info->track_speeds.push_back(speed);
+          detec_info->track_distances.push_back(dist);
+          detec_info->location.push_back(wd_cur);
+        }
+        cv::Mat detecImg;
+        image.copyTo(detecImg);
+        this->detecEvent(detecImg);          // 进行交通事件检测
+      }
     }
-    // 如果当前次迭代为该周期内最后一次跟踪
-    // 1. 更新速度、距离、坐标信息
-    // 2. 检测事件
-    if (this->cur_track_bboxs.size() == (this->interval-1)) {
-      cv::Mat detecImg;
-      image.copyTo(detecImg);
-      this->detecEvent(detecImg);          // 进行交通事件检测
-    }
+    
   }
   
   detec_info->index = (detec_info->index + 1) % 25;
-  // std::cout << "detec_info->track_boxes: " << detec_info->track_boxes.size() << std::endl;
-  // std::cout << "detec_info->track_classIds: " << detec_info->track_classIds.size() << std::endl;
-  // std::cout << "detec_info->track_confidences: " << detec_info->track_confidences.size() << std::endl;
   // 如果当前帧進行了物體檢測，那麼 track_boxes 保存的是當前幀的結果
   // 如果当前帧没有检测，track_boxes 保存的是先前幀的結果，這樣可以保證方框的連續性
   for (unsigned int i=0; i< detec_info->track_boxes.size(); i++) {
@@ -378,9 +406,24 @@ void Run::processOD(cv::Mat &image, int interval) {
     int height = detec_info->track_boxes[i].height;
     objectD->drawPred(detec_info->track_classIds[i], detec_info->track_confidences[i], 
             detec_info->track_speeds[i], detec_info->track_distances[i], x, y, x+width, y+height, image);
-    // objectD->drawPred(detec_info->track_classIds[i], detec_info->track_confidences[i], 
-    //          x, y, x+width, y+height, image);
   }
+}
+
+
+// 根据 this->cur_track_bboxs 计算两次物体检测期间的累计距离
+float Run::getDistBetweenTwoDetec(int index) {
+  float total_dist = 0.0;
+  // 计算第一个时刻的世界坐标
+  cv::Point2f pixel = getPixelPoint(this->cur_track_bboxs[0][index], 1);
+  cv::Point3f wd_pre = cameraToWorld(pixel);
+  for (int i=1; i<this->cur_track_bboxs.size(); i++) {
+    cv::Point3f wd_cur = cameraToWorld(getPixelPoint(cur_track_bboxs[i][index], 1));
+    float dist = sqrt(pow(wd_cur.x-wd_pre.x, 2) + pow(wd_cur.y-wd_pre.y, 2));
+    total_dist += dist;
+    wd_pre.x = wd_cur.x;    // 更新 wd_pre
+    wd_pre.y = wd_cur.y;
+  }
+  return total_dist;
 }
 
 
