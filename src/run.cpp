@@ -5,10 +5,11 @@ Run::Run() {
 
   this->projector = new Projector();
   this->objectD = new ObjectDetection();
-  this->interval = 3;
-  this->fps = 10;
+  // hasDetecEvent[4] = true;      // 测试，index 为 4 的事件开启
+  this->interval = 4;
+  this->fps = 15;
   image_size = cv::Size(1280, 720);
-  this->camera_coord = cv::Point3f(0.12, -2.9, 0);
+  this->camera_coord = cv::Point3f(0.0, 0.0, 0.0);
   cv::FileStorage cameraPameras(this->intrinsic_path, cv::FileStorage::READ);
   cv::FileStorage calibration_matrix(this->extrinsic_path, cv::FileStorage::READ);
   cameraPameras["camera_matrix"] >> this->cameraMatrix;
@@ -38,7 +39,7 @@ Run::Run() {
   this->sub_img_ = new message_filters::Subscriber<sensor_msgs::Image>(
           this->nh_, "/hik_cam_node/hik_camera", 1, ros::TransportHints().tcpNoDelay());
   this->sub_lidar_ = new message_filters::Subscriber<sensor_msgs::PointCloud2>(
-                this->nh_, "/lslidar_pointcloud_ch32", 1, ros::TransportHints().tcpNoDelay());
+                this->nh_, "/livox/lidar", 1, ros::TransportHints().tcpNoDelay());
   this->sync_ = new message_filters::Synchronizer<syncPolicy>(
                 syncPolicy(10), *sub_img_, *sub_lidar_);
   this->sync_->registerCallback(boost::bind(&Run::Callback, this, _1, _2));
@@ -46,7 +47,9 @@ Run::Run() {
   image_transport::ImageTransport it(this->nh_);
   this->pub_img_ = it.advertise("/hik_img", 1);
   this->pub_detec_info_ = this->nh_.advertise<detection_fusion::detecInfo>("/detecInfo", 5);
+  this->pub_event_ = this->nh_.advertise<detection_fusion::EventInfo>("/eventInfo", 5);
   this->srv_show_pcd = this->nh_.advertiseService("show_pcd", &Run::setShowPCD, this);
+  this->srv_set_event = this->nh_.advertiseService("set_event", &Run::setDetecEvent, this);
 }
 
 
@@ -60,14 +63,35 @@ Run::~Run() {
 // 设置点云是否可见的服务函数
 bool Run::setShowPCD(detection_fusion::ShowPCD::Request &req,        // ShowPCD 服务回调函数
                   detection_fusion::ShowPCD::Response &res) {
-  std::cout << "req.show_pcd: " << req.show_pcd << std::endl;
-  if (req.show_pcd == "on") {
+  std::cout << "req.flag: " << req.flag << std::endl;
+  if (req.flag == "on") {
     this->show_pcd = true;      // 显示点云数据
   } else {
     this->show_pcd = false;
   }
   res.status = 0;
   return true;
+}
+
+
+bool Run::setDetecEvent(detection_fusion::SetDetecEvent::Request &req,
+                      detection_fusion::SetDetecEvent::Response &res) {
+  // std::cout << req.event_index << " " << req.flag << std::endl;
+  if (req.event_index < 0 && req.event_index >= this->hasDetecEvent.size()) {
+    res.status = 1;
+    res.error = "event_index is not right";
+    return false;
+  } else {
+    int index = req.event_index;
+    if (req.flag == "on") {   // 开启检测
+      this->hasDetecEvent[index] = true;
+    } else {  // 关闭检测
+      this->hasDetecEvent[index] = false;
+      this->detec_event_index[index] = -1;
+    }
+    res.status = 0;
+    return true;
+  }
 }
 
 
@@ -84,6 +108,27 @@ void Run::Callback(const sensor_msgs::ImageConstPtr &msg_img,
   // 執行物體檢測
   this->processOD(fixed_img, this->interval);
 
+  /**
+   * 开启某一个事件：
+   *    hasDetecEvent[i] = true
+   * 关闭某一个事件：
+   *    hasDetecEvent[i] = false
+   *    detec_event_index[i] == -1
+   * 
+  */
+  // 图像帧计数器
+  for (int i=0; i<hasDetecEvent.size(); i++) {
+    if (hasDetecEvent[i] == true) {
+      // 如果事件开启，则相应的计数器开始计数
+      detec_event_index[i] = (detec_event_index[i] + 1) % event_detec_interval;
+      std::cout << "---: i: " << i << " detec_event_index: " << detec_event_index[i] << std::endl;
+    }
+  }
+  
+  cv::Mat detecImg;
+  fixed_img.copyTo(detecImg);
+  this->detecEvent(detecImg);          // 进行交通事件检测
+
   cv::Mat fusion_frame;
   if (this->show_pcd) {
     // 获取点云数据
@@ -98,7 +143,7 @@ void Run::Callback(const sensor_msgs::ImageConstPtr &msg_img,
   
   // 將 Mat 轉化爲 sensor_msgs::Image 話題數據
   sensor_msgs::ImagePtr pub_msg = cv_bridge::CvImage(
-                          std_msgs::Header(), "bgr8", fusion_frame).toImageMsg();
+                          std_msgs::Header(), "rgb8", fusion_frame).toImageMsg();
   this->pub_img_.publish(pub_msg);
 
   // 发布检测结果话题
@@ -180,6 +225,64 @@ cv::Point2f Run::getPixelPoint(Rect &rect, int type) {
 }
 
 
+void Run::detecEvent(cv::Mat &image) {
+
+  // 交通逆行
+
+
+  // 交通拥堵
+
+
+  // 异常变道
+
+
+  // 异常停车事件
+
+
+  // 弱势交通参与者闯入  默认检测整个画面
+  if (hasDetecEvent[4] && detec_event_index[4] == 0) {
+    bool flag = false;
+    DetectionInfo *detec_info =  objectD->detecRes;
+    for (int i=0; i < detec_info->track_classIds.size(); i++) {
+      if (detec_info->track_classIds[i] == 0) {   // 如果物体id为 0: person
+        flag = true;
+        cv::rectangle(image, detec_info->track_boxes[i], Scalar(255, 178, 50), 2);
+      }
+    }
+    if (flag) {
+      this->PubEventTopic(4, "弱势交通参与者闯入", "高", "正确", image);
+    }
+  }
+}
+
+
+void Run::PubEventTopic(int type, std::string e_name, std::string level, 
+                        std::string judge, cv::Mat &image) {
+  detection_fusion::EventInfo eventMsg;
+  eventMsg.type = type;
+  eventMsg.time = this->getCurTime();
+  eventMsg.event_name = e_name;
+  eventMsg.level = level;
+  eventMsg.judge = judge;
+  // cv::Mat tmp;
+  // image.copyTo(tmp);
+  // eventMsg.img = tmp;
+  sensor_msgs::ImagePtr pub_msg = cv_bridge::CvImage(
+                        std_msgs::Header(), "rgb8", image).toImageMsg();
+  eventMsg.img = *pub_msg;
+  this->pub_event_.publish(eventMsg);
+}
+
+
+std::string Run::getCurTime() {
+    time_t timep;
+    time (&timep);
+    char tmp[64];
+    strftime(tmp, sizeof(tmp), "%Y-%m-%d %H:%M:%S",localtime(&timep) );
+    return tmp;
+}
+
+
 void Run::processOD(cv::Mat &image, int interval) {
   DetectionInfo *detec_info = this->objectD->detecRes;
 
@@ -232,6 +335,10 @@ void Run::processOD(cv::Mat &image, int interval) {
           detec_info->location.push_back(wd_cur);
       }
     }
+
+    // 执行事件检测模块
+    // if (this->hasDetecEvent)  this->detecEvent(image);
+
   } else {
     // 跟蹤算法
     // objectD->runTrackerModel(image);

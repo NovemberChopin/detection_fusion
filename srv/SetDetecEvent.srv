@@ -1,0 +1,5 @@
+int16 event_index
+string flag             # on or off
+---
+int16 status            # 处理状态，0：处理无误，1：出错，error的值为错误消息内容
+string error            # 如果出错，返回错误消息

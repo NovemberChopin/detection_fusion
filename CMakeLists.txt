@@ -43,12 +43,14 @@ find_package(Boost REQUIRED)
 add_message_files(
   FILES
   detecInfo.msg
+  EventInfo.msg
 )
 
 ## Generate services in the 'srv' folder
 add_service_files(
   FILES
   ShowPCD.srv
+  SetDetecEvent.srv
 )
 
 ## Generate actions in the 'action' folder
@@ -62,6 +64,7 @@ add_service_files(
 generate_messages(
   DEPENDENCIES
   std_msgs
+  sensor_msgs
   geometry_msgs
 )
 
