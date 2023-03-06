@@ -19,8 +19,6 @@
 #include <pcl/point_types.h>
 #include <pcl_conversions/pcl_conversions.h>
 
-#include "extrinsic_param.hpp"
-#include "intrinsic_param.hpp"
 #include "projector_lidar.hpp"
 #include "object_detection.hpp"
 
@@ -62,8 +60,16 @@ private:
   Projector *projector;
   ObjectDetection *objectD;
 
-  std::string intrinsic_path = "/home/js/catkin/jiujiang/src/detection_fusion/config/camera_info.yml";
-  std::string extrinsic_path = "/home/js/catkin/jiujiang/src/detection_fusion/config/trans_matrix.yml";
+  std::string intrinsic_path;
+  std::string extrinsic_path;
+  string camera_topic_name;
+  string lidar_topic_name;
+  string fusion_topic_name;
+  string pub_detec_info_name;
+  string pub_event_name;
+  string srv_show_pcd_name;
+  string srv_set_event_name;
+
   bool show_pcd = false;            // 是否在视频中显示点云
 
   vector<vector<Rect2d>> cur_track_bboxs;       // 两次检测之间跟踪算法返回的的数据
@@ -76,8 +82,8 @@ private:
 	std::vector<int> detec_event_index = std::vector<int>(5, -1);			// 每个事件检测的间隔
 
   // 相机参数
-  int fps;                          // 视频帧率
-  int interval;                     // 物体检测间隔
+  int output_video_fps;                          // 视频帧率
+  int object_detec_interval;                     // 物体检测间隔
   cv::Size image_size;
   cv::Mat I = cv::Mat::eye(3, 3, CV_32FC1);
   cv::Mat mapX, mapY;
@@ -90,6 +96,7 @@ public:
   Run();
   ~Run();
   std::string getCurTime();
+  void getParams();
   void PubEventTopic(int type, std::string e_name, std::string level, 
                       std::string judge, cv::Mat &image);
   void Callback(const sensor_msgs::ImageConstPtr &msg_img,

@@ -1,0 +1,28 @@
+<launch>
+    <!-- EMQT: admin  password: kbw123456 -->
+    <param name="input_bag_path" value="$(find camera_lidar_calibration)/data/lidar/" />
+    <!-- Calib Params -->
+    <param name="camera_info" value="$(find detection_fusion)/config/camera_info.yml" />
+    <param name="trans_matrix" value="$(find detection_fusion)/config/trans_matrix.yml" />
+    <!-- Model Params -->
+    <param name="tracker_type" value="KCF" />
+    <param name="classes_file" value="$(find detection_fusion)/config/coco.names" />
+    <param name="model_config" value="$(find detection_fusion)/config/yolo-fastest-xl.cfg" />
+    <param name="model_weights" value="$(find detection_fusion)/config/yolo-fastest-xl.weights" />
+    <!-- Sub. Topics -->
+    <param name="camera_topic" value="/hik_cam_node/hik_camera" />
+    <param name="lidar_topic" value="/livox/lidar" />
+    <!-- Pub Topics -->
+    <param name="fusion_topic" value="/hik_img" />
+    <param name="pub_detec_info" value="/detecInfo" />
+    <param name="pub_event" value="/eventInfo" />
+    <!-- Service -->
+    <param name="srv_show_pcd" value="show_pcd" />
+    <param name="srv_set_event" value="set_event" />
+    <!-- 检测参数 -->
+    <param name="output_video_fps" type="int" value="15" />
+    <param name="object_detec_interval" type="int" value="5" />
+    <param name="event_detec_interval" type="int" value="10" />
+    <node pkg="detection_fusion" type="detection_fusion_node" name="detection_fusion_node" output="screen">
+    </node>
+</launch>

@@ -3,24 +3,47 @@
 #include "object_detection.hpp"
 
 ObjectDetection::ObjectDetection() {
-    std::cout << "ObjectDetection" << std::endl;
-    
-    detecRes = new DetectionInfo(0);
-    
-    // 讀取目標分類文本
-    ifstream ifs(classesFile.c_str());
-    string line;
-    while (getline(ifs, line)) 
-		classes.push_back(line);
+  std::cout << "ObjectDetection" << std::endl;
+  this->getParams();
+  
+  detecRes = new DetectionInfo(0);
+  
+  // 讀取目標分類文本
+  ifstream ifs(this->classesFile.c_str());
+  string line;
+  while (getline(ifs, line))
+  classes.push_back(line);
 
 	// 加载模型
-	net = readNetFromDarknet(modelConfiguration, modelWeights);
+	net = readNetFromDarknet(this->modelConfig, this->modelWeights);
 	cout << "Using CPU device" << endl;
-    net.setPreferableBackend(DNN_TARGET_CPU);
+  net.setPreferableBackend(DNN_TARGET_CPU);
 }
 
 ObjectDetection::~ObjectDetection() {
 
+}
+
+void ObjectDetection::getParams() {
+  if (!ros::param::get("tracker_type", this->trackerType)) {
+    cout << "Can not get the value of trans_matrix" << endl;
+    exit(1);
+  }
+
+  if (!ros::param::get("classes_file", this->classesFile)) {
+      cout << "Can not get the value of classes_file" << endl;
+      exit(1);
+  }
+
+  if (!ros::param::get("model_config", this->modelConfig)) {
+      cout << "Can not get the value of model_config" << endl;
+      exit(1);
+  }
+
+  if (!ros::param::get("model_weights", this->modelWeights)) {
+      cout << "Can not get the value of model_weights" << endl;
+      exit(1);
+  }
 }
 
 void ObjectDetection::hello() {

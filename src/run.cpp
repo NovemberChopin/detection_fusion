@@ -2,12 +2,13 @@
 #include "run.hpp"
 
 Run::Run() {
+  this->getParams();
 
   this->projector = new Projector();
   this->objectD = new ObjectDetection();
-  hasDetecEvent[1] = true;      // 测试，index 为 4 的事件开启
-  this->interval = 5;
-  this->fps = 15;
+
+  // hasDetecEvent[1] = true;      // 测试，index 为 4 的事件开启
+
   image_size = cv::Size(1280, 720);
   this->camera_coord = cv::Point3f(0.0, 0.0, 0.0);
   cv::FileStorage cameraPameras(this->intrinsic_path, cv::FileStorage::READ);
@@ -37,19 +38,19 @@ Run::Run() {
                       this->cameraMatrix, image_size, CV_32FC1, this->mapX, this->mapY);
 
   this->sub_img_ = new message_filters::Subscriber<sensor_msgs::Image>(
-          this->nh_, "/hik_cam_node/hik_camera", 1, ros::TransportHints().tcpNoDelay());
+          this->nh_, this->camera_topic_name, 1, ros::TransportHints().tcpNoDelay());
   this->sub_lidar_ = new message_filters::Subscriber<sensor_msgs::PointCloud2>(
-                this->nh_, "/livox/lidar", 1, ros::TransportHints().tcpNoDelay());
+                this->nh_, this->lidar_topic_name, 1, ros::TransportHints().tcpNoDelay());
   this->sync_ = new message_filters::Synchronizer<syncPolicy>(
                 syncPolicy(10), *sub_img_, *sub_lidar_);
   this->sync_->registerCallback(boost::bind(&Run::Callback, this, _1, _2));
 
   image_transport::ImageTransport it(this->nh_);
-  this->pub_img_ = it.advertise("/hik_img", 1);
-  this->pub_detec_info_ = this->nh_.advertise<detection_fusion::detecInfo>("/detecInfo", 5);
-  this->pub_event_ = this->nh_.advertise<detection_fusion::EventInfo>("/eventInfo", 5);
-  this->srv_show_pcd = this->nh_.advertiseService("show_pcd", &Run::setShowPCD, this);
-  this->srv_set_event = this->nh_.advertiseService("set_event", &Run::setDetecEvent, this);
+  this->pub_img_ = it.advertise(this->fusion_topic_name, 1);
+  this->pub_detec_info_ = this->nh_.advertise<detection_fusion::detecInfo>(this->pub_detec_info_name, 5);
+  this->pub_event_ = this->nh_.advertise<detection_fusion::EventInfo>(this->pub_event_name, 5);
+  this->srv_show_pcd = this->nh_.advertiseService(this->srv_show_pcd_name, &Run::setShowPCD, this);
+  this->srv_set_event = this->nh_.advertiseService(this->srv_set_event_name, &Run::setDetecEvent, this);
 }
 
 
@@ -57,6 +58,31 @@ Run::~Run() {
   delete this->sub_img_;
   delete this->sub_lidar_;
   delete this->sync_;
+}
+
+
+void Run::getParams() {
+  if (!ros::param::get("camera_info", this->intrinsic_path)) {
+    cout << "Can not get the value of camera_info" << endl;
+    exit(1);
+  }
+
+  if (!ros::param::get("trans_matrix", this->extrinsic_path)) {
+    cout << "Can not get the value of trans_matrix" << endl;
+    exit(1);
+  }
+
+  ros::param::get("camera_topic", this->camera_topic_name);
+  ros::param::get("lidar_topic", this->lidar_topic_name);
+  ros::param::get("fusion_topic", this->fusion_topic_name);
+  ros::param::get("pub_detec_info", this->pub_detec_info_name);
+  ros::param::get("pub_event", this->pub_event_name);
+  ros::param::get("srv_show_pcd", this->srv_show_pcd_name);
+  ros::param::get("srv_set_event", this->srv_set_event_name);
+
+  ros::param::get("output_video_fps", this->output_video_fps);
+  ros::param::get("object_detec_interval", this->object_detec_interval);
+  ros::param::get("event_detec_interval", this->event_detec_interval);
 }
 
 
@@ -106,7 +132,7 @@ void Run::Callback(const sensor_msgs::ImageConstPtr &msg_img,
     ROS_ERROR("Could not convert from '%s' to 'bgr8'.", msg_img->encoding.c_str());
   }
   // 執行物體檢測
-  this->processOD(fixed_img, this->interval);
+  this->processOD(fixed_img, this->object_detec_interval);
 
   cv::Mat fusion_frame;
   if (this->show_pcd) {
@@ -341,7 +367,7 @@ void Run::processOD(cv::Mat &image, int interval) {
       //   cv::Point3f wd_cur = cameraToWorld(cur_pixel);
       //   // 計算物體速度
       //   float delta = sqrt(pow(wd_cur.x-wd_pre.x, 2) + pow(wd_cur.y-wd_pre.y, 2));
-      //   float speed = delta / float(interval / float(this->fps));
+      //   float speed = delta / float(interval / float(this->output_video_fps));
       //   // 計算物體離相機的距離
       //   float dist_pre = sqrt(pow(wd_pre.x-this->camera_coord.x, 2) + 
       //                           pow(wd_pre.y-this->camera_coord.y, 2));
@@ -394,7 +420,7 @@ void Run::processOD(cv::Mat &image, int interval) {
       // 如果当前次迭代为该周期内最后一次跟踪
       // 1. 更新速度、距离、坐标信息
       // 2. 检测事件
-      if (this->cur_track_bboxs.size() == (this->interval-1)) {
+      if (this->cur_track_bboxs.size() == (this->object_detec_interval-1)) {
         detec_info->track_distances.clear();
         detec_info->track_speeds.clear();
         detec_info->location.clear();
@@ -407,7 +433,7 @@ void Run::processOD(cv::Mat &image, int interval) {
           cv::Point3f wd_cur = cameraToWorld(cur_pixel);
 
           float delta = getDistBetweenTwoDetec(i);
-          float speed = delta / float(this->interval / float(fps));
+          float speed = delta / float(this->object_detec_interval / float(output_video_fps));
 
           // 计算物体离相机的距离
           float dist_pre = sqrt(pow(wd_pre.x-this->camera_coord.x, 2) + 

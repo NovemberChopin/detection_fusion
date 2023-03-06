@@ -6,6 +6,7 @@
 #include <iostream>
 #include <string>
 
+#include <ros/ros.h>
 #include <std_msgs/String.h>
 #include <opencv2/dnn.hpp>
 #include <opencv2/opencv.hpp>
@@ -43,15 +44,10 @@ private:
 	float confThreshold = 0.5; // Confidence threshold
 	float nmsThreshold = 0.4;  // Non-maximum suppression threshold
 
-  std::string trackerType = "KCF";
-
-	std::string classesFile = "/home/js/catkin/jiujiang/src/detection_fusion/config/coco.names";
-
-	// cv::String modelConfiguration = "./src/mul_t/resources/yolov4-tiny.cfg";
-  // cv::String modelWeights = "./src/mul_t/resources/yolov4-tiny.weights";
-
-	cv::String modelConfiguration = "/home/js/catkin/jiujiang/src/detection_fusion/config/yolo-fastest-xl.cfg";
-  cv::String modelWeights = "/home/js/catkin/jiujiang/src/detection_fusion/config/yolo-fastest-xl.weights";
+  std::string trackerType;
+	std::string classesFile;
+	std::string modelConfig;
+  std::string modelWeights;
   vector<string> trackerTypes = {"BOOSTING", "MIL", "KCF", "TLD", "MEDIANFLOW", "GOTURN", "MOSSE", "CSRT"}; 
 
 public:
@@ -62,6 +58,8 @@ public:
 
   ObjectDetection();
   ~ObjectDetection();
+
+  void getParams();
 
 	// 物体检测相关函数
   void runODModel(cv::Mat& frame);
