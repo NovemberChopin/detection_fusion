@@ -19,6 +19,7 @@
     <!-- Service -->
     <param name="srv_show_pcd" value="show_pcd" />
     <param name="srv_set_event" value="set_event" />
+    <param name="srv_get_config" value="get_config" />
     <!-- 检测参数 -->
     <param name="output_video_fps" type="int" value="15" />
     <param name="object_detec_interval" type="int" value="5" />

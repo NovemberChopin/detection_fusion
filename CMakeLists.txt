@@ -51,6 +51,7 @@ add_service_files(
   FILES
   ShowPCD.srv
   SetDetecEvent.srv
+  GetConfig.srv
 )
 
 ## Generate actions in the 'action' folder

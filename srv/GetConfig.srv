@@ -1,0 +1,4 @@
+# 返回当前系统配置信息，没有请求数据
+---
+bool showPCD
+bool[] eventState

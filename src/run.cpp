@@ -51,6 +51,7 @@ Run::Run() {
   this->pub_event_ = this->nh_.advertise<detection_fusion::EventInfo>(this->pub_event_name, 5);
   this->srv_show_pcd = this->nh_.advertiseService(this->srv_show_pcd_name, &Run::setShowPCD, this);
   this->srv_set_event = this->nh_.advertiseService(this->srv_set_event_name, &Run::setDetecEvent, this);
+  this->srv_get_config = this->nh_.advertiseService(this->srv_get_config_name, &Run::getConfigCallback, this);
 }
 
 
@@ -79,6 +80,7 @@ void Run::getParams() {
   ros::param::get("pub_event", this->pub_event_name);
   ros::param::get("srv_show_pcd", this->srv_show_pcd_name);
   ros::param::get("srv_set_event", this->srv_set_event_name);
+  ros::param::get("srv_get_config", this->srv_get_config_name);
 
   ros::param::get("output_video_fps", this->output_video_fps);
   ros::param::get("object_detec_interval", this->object_detec_interval);
@@ -118,6 +120,14 @@ bool Run::setDetecEvent(detection_fusion::SetDetecEvent::Request &req,
     res.status = 0;
     return true;
   }
+}
+
+
+bool Run::getConfigCallback(detection_fusion::GetConfig::Request &req,
+                          detection_fusion::GetConfig::Response &res) {
+  res.showPCD = this->show_pcd;
+  res.eventState.assign(this->hasDetecEvent.begin(), this->hasDetecEvent.end());
+  return true;
 }
 
 

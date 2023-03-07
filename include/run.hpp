@@ -26,6 +26,7 @@
 #include "detection_fusion/EventInfo.h"
 #include "detection_fusion/ShowPCD.h"
 #include "detection_fusion/SetDetecEvent.h"
+#include "detection_fusion/GetConfig.h"
 #include "geometry_msgs/Point.h"
 
 #include <Eigen/Core>
@@ -56,6 +57,7 @@ private:
 
   ros::ServiceServer srv_show_pcd;          // 设置点云是否可见的服务
   ros::ServiceServer srv_set_event;         // 设置交通事件检测是否开启
+  ros::ServiceServer srv_get_config;        // 返回当前系统的设置信息
 
   Projector *projector;
   ObjectDetection *objectD;
@@ -69,6 +71,7 @@ private:
   string pub_event_name;
   string srv_show_pcd_name;
   string srv_set_event_name;
+  string srv_get_config_name;
 
   bool show_pcd = false;            // 是否在视频中显示点云
 
@@ -110,5 +113,7 @@ public:
                   detection_fusion::ShowPCD::Response &res);
   bool setDetecEvent(detection_fusion::SetDetecEvent::Request &req,
                       detection_fusion::SetDetecEvent::Response &res);
+  bool getConfigCallback(detection_fusion::GetConfig::Request &req,
+                          detection_fusion::GetConfig::Response &res);
 };
 
