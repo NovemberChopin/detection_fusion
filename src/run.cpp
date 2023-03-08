@@ -32,15 +32,15 @@ Run::Run() {
   cv::Rodrigues(rotationVector, this->rotationMatrix);
   // std::cerr << "Rotation Matrix:" << std::endl << this->rotationMatrix << std::endl;
   // std::cerr << "Trans Matrix:" << std::endl << this->transVector << std::endl;
-  this->cameraMatrix.convertTo(this->cameraMatrix, CV_32FC1);
-  this->distCoeffs.convertTo(this->distCoeffs, CV_32FC1);
-  this->R_matrix.convertTo(this->R_matrix, CV_32FC1);
-  this->T_matrix.convertTo(this->T_matrix, CV_32FC1);
-  this->rotationMatrix.convertTo(this->rotationMatrix, CV_32FC1);
-  this->transVector.convertTo(this->transVector, CV_32FC1);
+  // this->cameraMatrix.convertTo(this->cameraMatrix, CV_32FC1);
+  // this->distCoeffs.convertTo(this->distCoeffs, CV_32FC1);
+  // this->R_matrix.convertTo(this->R_matrix, CV_32FC1);
+  // this->T_matrix.convertTo(this->T_matrix, CV_32FC1);
+  // this->rotationMatrix.convertTo(this->rotationMatrix, CV_32FC1);
+  // this->transVector.convertTo(this->transVector, CV_32FC1);
   // 計算映射矩陣
   cv::initUndistortRectifyMap(this->cameraMatrix, this->distCoeffs, cv::Mat(), 
-                      this->cameraMatrix, image_size, CV_32FC1, this->mapX, this->mapY);
+                      this->cameraMatrix, image_size, CV_16SC2, this->mapX, this->mapY);
 
   this->sub_img_ = new message_filters::Subscriber<sensor_msgs::Image>(
           this->nh_, this->camera_topic_name, 1, ros::TransportHints().tcpNoDelay());
@@ -176,8 +176,8 @@ void Run::Callback(const sensor_msgs::ImageConstPtr &msg_img,
     fusion_frame = fixed_img;
   }
 
-  if (this->vec_ROI[4].width != 0)
-    cv::rectangle(fusion_frame, this->vec_ROI[4], cv::Scalar(255, 0, 0), 2, 8);
+  if (this->vec_ROI[2].width != 0)
+    cv::rectangle(fusion_frame, this->vec_ROI[2], cv::Scalar(255, 0, 0), 2, 8);
 
   if (this->vec_ROI[0].x != 0 && this->vec_ROI[0].width != 0) {
     Point2d point_1 = Point2d(vec_ROI[0].x, vec_ROI[0].y);
@@ -222,32 +222,46 @@ void Run::Callback(const sensor_msgs::ImageConstPtr &msg_img,
  * @return cv::Point3f 世界坐标
  */
 cv::Point3f Run::cameraToWorld(cv::Point2f point) {
-  cv::Mat invR_x_invM_x_uv1, invR_x_tvec, wcPoint;
-  double Z = 0;   // Hypothesis ground:
+  // cv::Mat invR_x_invM_x_uv1, invR_x_tvec, wcPoint;
+  // double Z = 0;   // Hypothesis ground:
 
-	cv::Mat screenCoordinates = cv::Mat::ones(3, 1, cv::DataType<double>::type);
-	screenCoordinates.at<double>(0, 0) = point.x;
-	screenCoordinates.at<double>(1, 0) = point.y;
-	screenCoordinates.at<double>(2, 0) = 1; // f=1
+	// cv::Mat screenCoordinates = cv::Mat::ones(3, 1, cv::DataType<double>::type);
+	// screenCoordinates.at<double>(0, 0) = point.x;
+	// screenCoordinates.at<double>(1, 0) = point.y;
+	// screenCoordinates.at<double>(2, 0) = 1; // f=1
 
-  invR_x_invM_x_uv1.convertTo(invR_x_invM_x_uv1, CV_32FC1);
-  invR_x_tvec.convertTo(invR_x_tvec, CV_32FC1);
-  wcPoint.convertTo(wcPoint, CV_32FC1);
-  screenCoordinates.convertTo(screenCoordinates, CV_32FC1);
+  // invR_x_invM_x_uv1.convertTo(invR_x_invM_x_uv1, CV_32FC1);
+  // invR_x_tvec.convertTo(invR_x_tvec, CV_32FC1);
+  // wcPoint.convertTo(wcPoint, CV_32FC1);
+  // screenCoordinates.convertTo(screenCoordinates, CV_32FC1);
 
-	// s and point calculation, described here:
-	// https://stackoverflow.com/questions/12299870/computing-x-y-coordinate-3d-from-image-point
-	// invR_x_invM_x_uv1 = rotationMatrix.inv() * cameraMatrix.inv() * screenCoordinates;
-	// invR_x_tvec = rotationMatrix.inv() * transVector;
-	// wcPoint = (Z + invR_x_tvec.at<double>(2, 0)) / invR_x_invM_x_uv1.at<double>(2, 0) * invR_x_invM_x_uv1 - invR_x_tvec;
-	// //wcPoint = invR_x_invM_x_uv1 - invR_x_tvec;
-	// cv::Point3f worldCoordinates(wcPoint.at<double>(0, 0), wcPoint.at<double>(1, 0), wcPoint.at<double>(2, 0));
+	// invR_x_invM_x_uv1 = this->rotationMatrix.inv() * this->cameraMatrix.inv() * screenCoordinates;
+  // invR_x_tvec = this->rotationMatrix.inv() * this->transVector;
+  // wcPoint = (Z + invR_x_tvec.at<double>(2, 0)) / invR_x_invM_x_uv1.at<double>(2, 0) * invR_x_invM_x_uv1 - invR_x_tvec;
+  // cv::Point3f worldCoordinates(wcPoint.at<double>(0, 0), wcPoint.at<double>(1, 0), wcPoint.at<double>(2, 0));
+  // return worldCoordinates;
 
-	invR_x_invM_x_uv1 = this->rotationMatrix.inv() * this->cameraMatrix.inv() * screenCoordinates;
-  invR_x_tvec = this->rotationMatrix.inv() * this->transVector;
-  wcPoint = (Z + invR_x_tvec.at<double>(2, 0)) / invR_x_invM_x_uv1.at<double>(2, 0) * invR_x_invM_x_uv1 - invR_x_tvec;
-  cv::Point3f worldCoordinates(wcPoint.at<double>(0, 0), wcPoint.at<double>(1, 0), wcPoint.at<double>(2, 0));
-  return worldCoordinates;
+  cv::Mat uvPoint = cv::Mat::ones(3, 1, cv::DataType<double>::type);
+  uvPoint.at<double>(0, 0) = point.x;
+	uvPoint.at<double>(1, 0) = point.y;
+
+  cv::Mat tempMat, tempMat2;
+  cv::Mat wcPoint;
+
+  // uvPoint.convertTo(uvPoint, CV_32FC1);
+  // tempMat.convertTo(tempMat, CV_32FC1);
+  // tempMat2.convertTo(tempMat2, CV_32FC1);
+  // wcPoint.convertTo(wcPoint, CV_32FC1);
+
+
+  double s, zConst = 0;
+  tempMat = rotationMatrix.inv() * cameraMatrix.inv() * uvPoint;
+  tempMat2 = rotationMatrix.inv() * transVector;
+  s = zConst + tempMat2.at<double>(2, 0);
+  s /= tempMat.at<double>(2, 0);
+  wcPoint = rotationMatrix.inv() * (s * cameraMatrix.inv() * uvPoint - transVector);
+	cv::Point3f realPoint(wcPoint.at<double>(0, 0), wcPoint.at<double>(1, 0), wcPoint.at<double>(2, 0));
+  return realPoint;
 }
 
 
@@ -278,31 +292,38 @@ void Run::detecEvent(cv::Mat &image) {
   // 异常变道
 
 
-  // 交通拥堵
-  if (this->hasDetecEvent[2] && detec_event_index[2] == 0) {
-    int left_car = 0;
-    int right_car = 0;
+  // 交通拥堵检测条件：开启事件检测，ROI区域宽度不为0
+  // 事件判定条件：
+  // 1. 速度较低 < 1m/s   2. 距离近
+  if (this->hasDetecEvent[2] && detec_event_index[2] == 0 && this->vec_ROI[2].width != 0) {
+    int num = 0;
     bool flag = false;
     for (int i=0; i < detec_info->track_classIds.size(); i++) {
       // 如果物体id大于0 : car. 且速度小于10
-      if (detec_info->track_classIds[i] > 0 && abs(detec_info->track_speeds[i]) < 10) {
+      if (detec_info->track_classIds[i] == 0 && abs(detec_info->track_speeds[i]) < 10) {
         // 计算检测框的质心
         double c_x = detec_info->track_boxes[i].x + detec_info->track_boxes[i].width / 2;
         double c_y = detec_info->track_boxes[i].y + detec_info->track_boxes[i].height / 2;
         cv::Point2d c_point = cv::Point2d(c_x, c_y);
-        if (this->left_road_roi.contains(c_point)) left_car += 1;
-        if (this->right_road_roi.contains(c_point)) right_car += 1;
+        if (this->vec_ROI[2].contains(c_point)) {
+          num += 1;
+        }
       }
     }
-    // TODO: 当左侧道路有超过三辆车，就认为交通拥挤。右侧同理
-    if (left_car > 3) {
-      cv::rectangle(image, this->left_road_roi, Scalar(255, 50, 50), 2);
-      flag = true;
-    }
-    if (right_car > 3) {
-      cv::rectangle(image, this->right_road_roi, Scalar(255, 50, 50), 2);
-      flag = true;
-    }
+    std::cout << "event index is 2: " << num << endl; 
+    // 计算检测框对应的实际坐标的面积
+    Point2f left_top = Point2f(vec_ROI[2].x, vec_ROI[2].y);
+    Point2f right_bottom = Point2f(vec_ROI[2].x+vec_ROI[2].width, vec_ROI[2].y+vec_ROI[2].height);
+
+    Point3f real_lt = cameraToWorld(Point2f(548.0, 420.0));
+    Point3f real_rb = cameraToWorld(Point2f(798.0, 418.0));
+    // Point3f real_lt = cameraToWorld(left_top);
+    // Point3f real_rb = cameraToWorld(right_bottom);
+    // double real_width = real_rb.x - real_lt.x;
+    // double real_height = real_rb.y - real_lt.y;
+    // cout << "real_width: " << real_width << " real_height: " << real_height << " | " << real_width * real_height << endl;
+    cout << real_lt.x << " | " << real_lt.y << endl;
+    cout << real_rb.x << " | " << real_rb.y << endl;
     if (flag) {
       this->PubEventTopic(1, "交通拥挤", "高", "正确", image);
     }

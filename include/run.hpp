@@ -95,7 +95,7 @@ private:
   int output_video_fps;                          // 视频帧率
   int object_detec_interval;                     // 物体检测间隔
   cv::Size image_size;
-  cv::Mat I = cv::Mat::eye(3, 3, CV_32FC1);
+  // cv::Mat I = cv::Mat::eye(3, 3, CV_32FC1);
   cv::Mat mapX, mapY;
   cv::Mat cameraMatrix, distCoeffs;
   cv::Mat R_matrix, T_matrix;               // 雷達到攝像頭的轉移矩陣和平移矩陣

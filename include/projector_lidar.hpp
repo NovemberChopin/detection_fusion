@@ -60,7 +60,7 @@ public:
   void setFilterMode(bool filter_mode) { overlap_filter_ = filter_mode; }
 
   bool loadPointCloud(pcl::PointCloud<pcl::PointXYZI> pcl) {
-    oriCloud = cv::Mat(cv::Size(pcl.points.size(), 3), CV_32FC1);
+    oriCloud = cv::Mat(cv::Size(pcl.points.size(), 3), CV_64FC1);
     for (size_t i = 0; i < pcl.points.size(); ++i) {
       oriCloud.at<float>(0, i) = pcl.points[i].x;
       oriCloud.at<float>(1, i) = pcl.points[i].y;
