@@ -107,6 +107,7 @@ public:
   ~Run();
   std::string getCurTime();
   void getParams();
+  bool isStatic(vector<vector<Rect2d>> &track_boxes, int index);
   void PubEventTopic(int type, std::string e_name, std::string level, 
                       std::string judge, cv::Mat &image);
   void Callback(const sensor_msgs::ImageConstPtr &msg_img,

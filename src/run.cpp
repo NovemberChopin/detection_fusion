@@ -312,15 +312,31 @@ void Run::detecEvent(cv::Mat &image) {
   // 异常停车事件
   if (this->hasDetecEvent[3] && detec_event_index[3] == 0) {
     bool flag = false;
-    for (int i=0; i < detec_info->track_classIds.size(); i++) {
-      // TODO: 这里直接将速度小于 0.2 的车视为停车。
-      // 后面可以优化判断条件，根据最近几次的位置来判断是否
-      if (detec_info->track_classIds[i] > 0 && abs(detec_info->track_speeds[i]) < 0.2) {
-        flag = true;
-        cv::rectangle(image, detec_info->track_boxes[i], Scalar(255, 50, 50), 2);
+    if (this->vec_ROI[3].width == 0) {     // 默认检测整个画面
+      for (int i=0; i < detec_info->track_classIds.size(); i++) {
+        if (detec_info->track_classIds[i] > 0 && 
+                      this->isStatic(this->cur_track_bboxs, i)) {
+          flag = true;
+          cv::rectangle(image, detec_info->track_boxes[i], Scalar(255, 50, 50), 2);
+        }
+      }
+    }
+    else {        // 如果选择了ROI区域，在确定区域检测
+      for (int i=0; i < detec_info->track_classIds.size(); i++) {
+        double c_x = detec_info->track_boxes[i].x + detec_info->track_boxes[i].width / 2;
+        double c_y = detec_info->track_boxes[i].y + detec_info->track_boxes[i].height / 2;
+        Point2d c_point = Point2d(c_x, c_y);
+        // 如果物体为车，在ROI框内，而且还是静止
+        if (detec_info->track_classIds[i] > 0 && 
+                  this->vec_ROI[3].contains(c_point) &&
+                  this->isStatic(this->cur_track_bboxs, i)) {
+          flag = true;
+          cv::rectangle(image, detec_info->track_boxes[i], Scalar(255, 50, 50), 2);
+        }
       }
     }
     if (flag) {
+      rectangle(image, this->vec_ROI[3], Scalar(255, 0, 0), 2);
       this->PubEventTopic(3, "异常停车", "高", "正确", image);
     }
   }
@@ -382,6 +398,33 @@ std::string Run::getCurTime() {
     char tmp[64];
     strftime(tmp, sizeof(tmp), "%Y-%m-%d %H:%M:%S",localtime(&timep) );
     return tmp;
+}
+
+// 计算下标为index 的物体在两次检测间隔间坐标的方差，判断是否为静止
+bool Run::isStatic(vector<vector<Rect2d>> &track_boxes, int index) {
+  if (track_boxes.size() == 0 || track_boxes[0].size() == 0)
+    return false;
+  double sum_x = 0;
+  double sum_y = 0;
+  for (int i=0; i<track_boxes.size(); i++) {
+    sum_x += track_boxes[i][index].x;
+    sum_y += track_boxes[i][index].y;
+  }
+  double mean_x = sum_x / track_boxes.size();
+  double mean_y = sum_y / track_boxes.size();
+  double tmp_x = 0, tmp_y = 0;
+  for (int i=0; i<track_boxes.size(); i++) {
+    tmp_x += pow((track_boxes[i][index].x - mean_x), 2);
+    tmp_y += pow((track_boxes[i][index].y - mean_y), 2);
+  }
+  double vari_x = tmp_x / track_boxes.size();
+  double vari_y = tmp_y / track_boxes.size();
+  // cout << "index: " << index << " | " << vari_x << " " << vari_y << endl;
+  if (vari_x < 0.1 && vari_y < 0.1) {   // 认为物体静止
+    return true;
+  } else {
+    return false;
+  }
 }
 
 
