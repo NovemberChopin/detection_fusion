@@ -6,6 +6,11 @@ Run::Run() {
 
   this->projector = new Projector();
   this->objectD = new ObjectDetection();
+  // 初始化各个事件的ROI区域
+  Rect2d tmp = Rect2d(0, 0, 0, 0);
+  for (int i=0; i<5; i++) {
+    vec_ROI.push_back(tmp);
+  }
 
   // hasDetecEvent[1] = true;      // 测试，index 为 4 的事件开启
 
@@ -52,6 +57,7 @@ Run::Run() {
   this->srv_show_pcd = this->nh_.advertiseService(this->srv_show_pcd_name, &Run::setShowPCD, this);
   this->srv_set_event = this->nh_.advertiseService(this->srv_set_event_name, &Run::setDetecEvent, this);
   this->srv_get_config = this->nh_.advertiseService(this->srv_get_config_name, &Run::getConfigCallback, this);
+  this->srv_set_line_roi = this->nh_.advertiseService(this->srv_set_line_roi_name, &Run::getLineOrROI, this);
 }
 
 
@@ -81,6 +87,7 @@ void Run::getParams() {
   ros::param::get("srv_show_pcd", this->srv_show_pcd_name);
   ros::param::get("srv_set_event", this->srv_set_event_name);
   ros::param::get("srv_get_config", this->srv_get_config_name);
+  ros::param::get("srv_set_line_roi", this->srv_set_line_roi_name);
 
   ros::param::get("output_video_fps", this->output_video_fps);
   ros::param::get("object_detec_interval", this->object_detec_interval);
@@ -116,17 +123,30 @@ bool Run::setDetecEvent(detection_fusion::SetDetecEvent::Request &req,
     } else {  // 关闭检测
       this->hasDetecEvent[index] = false;
       this->detec_event_index[index] = -1;
+      this->vec_ROI[index].width = 0;       // 取消事件的ROI
     }
     res.status = 0;
     return true;
   }
 }
 
-
+// 获取当前系统配置回调函数
 bool Run::getConfigCallback(detection_fusion::GetConfig::Request &req,
                           detection_fusion::GetConfig::Response &res) {
   res.showPCD = this->show_pcd;
   res.eventState.assign(this->hasDetecEvent.begin(), this->hasDetecEvent.end());
+  return true;
+}
+
+// 从前端获取Line和ROI服务的回调函数
+bool Run::getLineOrROI(detection_fusion::SetLineOrRect::Request &req,
+                    detection_fusion::SetLineOrRect::Response &res) {
+  std::cout << req.eventIndex << " " << req.data[0] << " " << req.data[1] <<
+                    " " << req.data[2] << " " << req.data[3] << std::endl;
+  this->vec_ROI[req.eventIndex].x = req.data[0];
+  this->vec_ROI[req.eventIndex].y = req.data[1];
+  this->vec_ROI[req.eventIndex].width = req.data[2];
+  this->vec_ROI[req.eventIndex].height = req.data[3];
   return true;
 }
 
@@ -155,6 +175,16 @@ void Run::Callback(const sensor_msgs::ImageConstPtr &msg_img,
   } else {
     fusion_frame = fixed_img;
   }
+
+  if (this->vec_ROI[4].width != 0)
+    cv::rectangle(fusion_frame, this->vec_ROI[4], cv::Scalar(255, 0, 0), 2, 8);
+
+  if (this->vec_ROI[0].x != 0 && this->vec_ROI[0].width != 0) {
+    Point2d point_1 = Point2d(vec_ROI[0].x, vec_ROI[0].y);
+    Point2d point_2 = Point2d(vec_ROI[0].width, vec_ROI[0].height);
+    cv::line(fusion_frame, point_1, point_2, Scalar(255, 255, 0), 2, 8);
+  }
+  
   
   // 將 Mat 轉化爲 sensor_msgs::Image 話題數據
   sensor_msgs::ImagePtr pub_msg = cv_bridge::CvImage(
@@ -245,8 +275,11 @@ void Run::detecEvent(cv::Mat &image) {
   // 交通逆行
 
 
+  // 异常变道
+
+
   // 交通拥堵
-  if (this->hasDetecEvent[1] && detec_event_index[1] == 0) {
+  if (this->hasDetecEvent[2] && detec_event_index[2] == 0) {
     int left_car = 0;
     int right_car = 0;
     bool flag = false;
@@ -275,8 +308,6 @@ void Run::detecEvent(cv::Mat &image) {
     }
   }
 
-  // 异常变道
-
 
   // 异常停车事件
   if (this->hasDetecEvent[3] && detec_event_index[3] == 0) {
@@ -298,13 +329,29 @@ void Run::detecEvent(cv::Mat &image) {
   // 弱势交通参与者闯入  默认检测整个画面
   if (hasDetecEvent[4] && detec_event_index[4] == 0) {
     bool flag = false;
-    for (int i=0; i < detec_info->track_classIds.size(); i++) {
-      if (detec_info->track_classIds[i] == 0) {   // 如果物体id为 0: person
-        flag = true;
-        cv::rectangle(image, detec_info->track_boxes[i], Scalar(255, 50, 50), 2);
+    if (this->vec_ROI[4].width == 0) {    // 如果检测的区域为空，那么进行全局检测
+      for (int i=0; i < detec_info->track_classIds.size(); i++) {
+        if (detec_info->track_classIds[i] == 0) {   // 如果物体id为 0: person
+          flag = true;
+          cv::rectangle(image, detec_info->track_boxes[i], Scalar(255, 50, 50), 2);
+        }
+      }
+    } 
+    else {    // 检测ROI区域
+      for (int i=0; i < detec_info->track_classIds.size(); i++) {
+        if (detec_info->track_classIds[i] == 0) {
+          double c_x = detec_info->track_boxes[i].x + detec_info->track_boxes[i].width / 2;
+          double c_y = detec_info->track_boxes[i].y + detec_info->track_boxes[i].height / 2;
+          Point2d c_point = Point2d(c_x, c_y);
+          if (this->vec_ROI[4].contains(c_point)) {
+            flag = true;
+            cv::rectangle(image, detec_info->track_boxes[i], Scalar(255, 50, 50), 2);
+          }
+        }
       }
     }
     if (flag) {
+      cv::rectangle(image, this->vec_ROI[4], Scalar(255, 0, 0), 2);
       this->PubEventTopic(4, "弱势交通参与者闯入", "高", "正确", image);
     }
   }

@@ -27,6 +27,7 @@
 #include "detection_fusion/ShowPCD.h"
 #include "detection_fusion/SetDetecEvent.h"
 #include "detection_fusion/GetConfig.h"
+#include "detection_fusion/SetLineOrRect.h"
 #include "geometry_msgs/Point.h"
 
 #include <Eigen/Core>
@@ -58,6 +59,7 @@ private:
   ros::ServiceServer srv_show_pcd;          // 设置点云是否可见的服务
   ros::ServiceServer srv_set_event;         // 设置交通事件检测是否开启
   ros::ServiceServer srv_get_config;        // 返回当前系统的设置信息
+  ros::ServiceServer srv_set_line_roi;      // 设置事件检测的车道线和ROI区域
 
   Projector *projector;
   ObjectDetection *objectD;
@@ -72,6 +74,7 @@ private:
   string srv_show_pcd_name;
   string srv_set_event_name;
   string srv_get_config_name;
+  string srv_set_line_roi_name;
 
   bool show_pcd = false;            // 是否在视频中显示点云
 
@@ -80,6 +83,10 @@ private:
   // 事件检测参数
   cv::Rect2d left_road_roi = Rect2d(320, 0, 320, 720);
   cv::Rect2d right_road_roi = Rect2d(640, 0, 320, 720);
+  cv::Point2d point_1 = Point2d(0, 0);                              // 标识车道线的两点
+  cv::Point2d point_2 = Point2d(0, 0);                              // 
+  cv::Rect2d detec_ROI = Rect2d(0, 0, 0, 0);                        // 事件检测的ROI区域
+  vector<Rect2d> vec_ROI;                                           // 存储每个事件的ROI区域
   int event_detec_interval = 10;                                    // 事件检测周期（10表示进行10次物体检测后进行一次事件检测）
   std::vector<bool> hasDetecEvent = std::vector<bool>(5, false);		// 对应五种事件是否开始检测
 	std::vector<int> detec_event_index = std::vector<int>(5, -1);			// 每个事件检测的间隔
@@ -115,5 +122,7 @@ public:
                       detection_fusion::SetDetecEvent::Response &res);
   bool getConfigCallback(detection_fusion::GetConfig::Request &req,
                           detection_fusion::GetConfig::Response &res);
+  bool getLineOrROI(detection_fusion::SetLineOrRect::Request &req,
+                    detection_fusion::SetLineOrRect::Response &res);
 };
 
