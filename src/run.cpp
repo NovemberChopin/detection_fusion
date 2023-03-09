@@ -147,10 +147,24 @@ bool Run::getLineOrROI(detection_fusion::SetLineOrRect::Request &req,
                     detection_fusion::SetLineOrRect::Response &res) {
   std::cout << req.eventIndex << " " << req.data[0] << " " << req.data[1] <<
                     " " << req.data[2] << " " << req.data[3] << std::endl;
-  this->vec_ROI[req.eventIndex].x = req.data[0];
-  this->vec_ROI[req.eventIndex].y = req.data[1];
-  this->vec_ROI[req.eventIndex].width = req.data[2];
-  this->vec_ROI[req.eventIndex].height = req.data[3];
+  if (req.eventIndex > 1) {
+    this->vec_ROI[req.eventIndex].x = req.data[0];
+    this->vec_ROI[req.eventIndex].y = req.data[1];
+    this->vec_ROI[req.eventIndex].width = req.data[2];
+    this->vec_ROI[req.eventIndex].height = req.data[3];
+  } else {      // 异常变道和交通逆行事件
+    // 计算 k 和 b
+    this->p1.x = req.data[0];
+    this->p1.y = req.data[1];
+    this->p2.x = req.data[2];
+    this->p2.y = req.data[3];
+    if (this->line_params != nullptr) {
+      delete this->line_params;
+    }
+    this->line_params = new Point2d(this->getLineParams(p1, p2));
+    std::cout << "Line_params: " << *line_params << std::endl;
+  }
+  
   return true;
 }
 
@@ -183,10 +197,8 @@ void Run::Callback(const sensor_msgs::ImageConstPtr &msg_img,
   if (this->vec_ROI[2].width != 0)
     cv::rectangle(fusion_frame, this->vec_ROI[2], cv::Scalar(255, 0, 0), 2, 8);
 
-  if (this->vec_ROI[0].x != 0 && this->vec_ROI[0].width != 0) {
-    Point2d point_1 = Point2d(vec_ROI[0].x, vec_ROI[0].y);
-    Point2d point_2 = Point2d(vec_ROI[0].width, vec_ROI[0].height);
-    cv::line(fusion_frame, point_1, point_2, Scalar(255, 255, 0), 2, 8);
+  if (this->p1.x != 0 && this->p1.y != 0) {
+    cv::line(fusion_frame, this->p1, this->p2, Scalar(255, 255, 0), 2, 8);
   }
   
   
@@ -288,12 +300,63 @@ cv::Point2f Run::getPixelPoint(Rect2d &rect, int type) {
 }
 
 
+cv::Point2d Run::getLineParams(Point2d &p1, Point2d &p2) {
+  double x1 = p1.x;
+  double y1 = p1.y;
+  double x2 = p2.x;
+  double y2 = p2.y;
+  double k = (y2-y1)/(x2-x1 + 1e-6);
+  double b = y1 - k*x1;
+  Point2d line = Point2d(k, b);
+  return line; 
+}
+
+
+/**
+ * 判断 point 点是否在直线的左边
+*/
+bool Run::isInLeft(double k, double b, Point2d point) {
+  double real_x = point.x;
+  double real_y = point.y;
+  double pre_y = k * real_x + b;
+  if (k > 0) {      // 如果车道线斜率 > 0
+    if (real_y > pre_y)   return true;
+    else return false;
+  } else {
+    if (real_y <= pre_y)  return true;
+    else return false;
+  }
+}
+
+
 void Run::detecEvent(cv::Mat &image) {
   DetectionInfo *detec_info =  objectD->detecRes;
   // 交通逆行
 
 
   // 异常变道
+  if (this->hasDetecEvent[1] && detec_event_index[1] == 0 && this->line_params && 
+              detec_info->track_classIds.size() == detec_info->leftOrRight.size()) {
+    double k = line_params->x;
+    double b = line_params->y;
+    bool flag = false;
+    // cv::Point2d line = this->getLineParams(this->vec_ROI[1]);
+    for (int i=0; i<detec_info->track_classIds.size(); i++) {
+      if (detec_info->track_classIds[i] >= 0) {     // 同时检测车和行人
+        Point2d cur_pixel = this->getPixelPoint(detec_info->track_boxes[i], 1);
+        // 如果当前点的位置和上次检测时位置不同，则发生变道事件
+        if ((int)this->isInLeft(k, b, cur_pixel) != detec_info->leftOrRight[i]) {
+          flag = true;
+          cv::rectangle(image, detec_info->track_boxes[i], Scalar(255, 50, 50), 2);
+        }
+      }
+    }
+    if (flag) {
+      line(image, this->p1, this->p2, Scalar(255, 0, 0), 2);
+      this->PubEventTopic(1, "异常变道", "高", "正确", image);
+      std::cout << " 异常变道 "  << std::endl;
+    }
+  }
 
 
   // 交通拥堵检测条件：开启事件检测，ROI区域宽度不为0
@@ -323,7 +386,7 @@ void Run::detecEvent(cv::Mat &image) {
       cout << "Area: " << area << " Num: " << num << " | " << this->event_jam_threshold << endl;
       if ((area / num) < this->event_jam_threshold) {
         rectangle(image, this->vec_ROI[2], Scalar(255, 0, 0), 2);
-        this->PubEventTopic(1, "交通拥挤", "高", "正确", image);
+        this->PubEventTopic(2, "交通拥挤", "高", "正确", image);
       }
     }
   }
@@ -541,13 +604,21 @@ void Run::processOD(cv::Mat &image, int interval) {
         detec_info->track_distances.clear();
         detec_info->track_speeds.clear();
         detec_info->location.clear();
+        double k, b;
+        bool hasLine = false;
+        if (this->line_params != nullptr) {
+          k = line_params->x;
+          b = line_params->y;
+          hasLine = true;
+          detec_info->leftOrRight.clear();
+        }
         for (int i=0; i<detec_info->track_boxes.size(); i++) {
           // // 这里 type=1 表示返回底部中心坐标
-          cv::Point2f pre_pixel = getPixelPoint(this->cur_track_bboxs.front()[i], 1);
-          cv::Point2f cur_pixel = getPixelPoint(this->cur_track_bboxs.back()[i], 1);
+          cv::Point2d pre_pixel = getPixelPoint(this->cur_track_bboxs.front()[i], 1);
+          cv::Point2d cur_pixel = getPixelPoint(this->cur_track_bboxs.back()[i], 1);
           // // 计算真实世界坐标
-          cv::Point3f wd_pre = cameraToWorld(pre_pixel);
-          cv::Point3f wd_cur = cameraToWorld(cur_pixel);
+          cv::Point3d wd_pre = cameraToWorld(pre_pixel);
+          cv::Point3d wd_cur = cameraToWorld(cur_pixel);
           // std::cout << "index: " << i << " " << cur_pixel << " " << wd_cur << std::endl;
 
           float delta = getDistBetweenTwoDetec(i);
@@ -563,6 +634,14 @@ void Run::processOD(cv::Mat &image, int interval) {
           detec_info->track_speeds.push_back(speed);
           detec_info->track_distances.push_back(dist);
           detec_info->location.push_back(wd_cur);
+
+          if (hasLine) {       // 已经设置了车道
+            if (this->isInLeft(k, b, pre_pixel)) {
+              detec_info->leftOrRight.push_back(0);   // 左边
+            } else {
+              detec_info->leftOrRight.push_back(1);   // 右边
+            }
+          }
         }
         cv::Mat detecImg;
         image.copyTo(detecImg);

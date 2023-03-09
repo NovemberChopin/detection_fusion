@@ -64,6 +64,7 @@ private:
   Projector *projector;
   ObjectDetection *objectD;
 
+  /**** 配置信息 ****/
   std::string intrinsic_path;
   std::string extrinsic_path;
   string camera_topic_name;
@@ -83,14 +84,12 @@ private:
 
   bool show_pcd = false;            // 是否在视频中显示点云
 
-  vector<vector<Rect2d>> cur_track_bboxs;       // 两次检测之间跟踪算法返回的的数据
+  vector<vector<Rect2d>> cur_track_bboxs;       // 两次检测之间跟踪算法返回的的数据(ROI变化的时间序列)
 
   // 事件检测参数
-  cv::Rect2d left_road_roi = Rect2d(320, 0, 320, 720);
-  cv::Rect2d right_road_roi = Rect2d(640, 0, 320, 720);
-  cv::Point2d point_1 = Point2d(0, 0);                              // 标识车道线的两点
-  cv::Point2d point_2 = Point2d(0, 0);                              // 
-  cv::Rect2d detec_ROI = Rect2d(0, 0, 0, 0);                        // 事件检测的ROI区域
+  Point2d *line_params = nullptr;                                   // 车道线参数，x y 分别对应直线参数 k b
+  Point2d p1 = Point2d(0, 0);
+  Point2d p2 = Point2d(0, 0);
   vector<Rect2d> vec_ROI;                                           // 存储每个事件的ROI区域
   int event_detec_interval = 10;                                    // 事件检测周期（10表示进行10次物体检测后进行一次事件检测）
   std::vector<bool> hasDetecEvent = std::vector<bool>(5, false);		// 对应五种事件是否开始检测
@@ -112,7 +111,9 @@ public:
   ~Run();
   std::string getCurTime();
   void getParams();
+  cv::Point2d getLineParams(Point2d &p1, Point2d &p2);
   bool isStatic(vector<vector<Rect2d>> &track_boxes, int index, double event_park_variance);
+  bool isInLeft(double k, double b, Point2d point);
   void PubEventTopic(int type, std::string e_name, std::string level, 
                       std::string judge, cv::Mat &image);
   void Callback(const sensor_msgs::ImageConstPtr &msg_img,
