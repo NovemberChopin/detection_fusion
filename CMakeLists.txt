@@ -1,11 +1,10 @@
 cmake_minimum_required(VERSION 3.0.2)
 project(detection_fusion)
 
-set(OpenCV_DIR /home/js/shareFolder/opencv/build)
-set(cv_bridge_DIR /home/js/catkin/jiujiang/devel/share/cv_bridge/cmake)
+set(cv_bridge_DIR ${PROJECT_SOURCE_DIR}/../../devel/share/cv_bridge/cmake)
 
 ## Compile as C++11, supported in ROS Kinetic and newer
-# add_compile_options(-std=c++11)
+add_compile_options(-std=c++14)
 
 ## Find catkin macros and libraries
 ## if COMPONENTS list like find_package(catkin REQUIRED COMPONENTS xyz)
