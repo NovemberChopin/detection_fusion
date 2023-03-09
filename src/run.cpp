@@ -332,6 +332,33 @@ bool Run::isInLeft(double k, double b, Point2d point) {
 void Run::detecEvent(cv::Mat &image) {
   DetectionInfo *detec_info =  objectD->detecRes;
   // 交通逆行
+  if (this->hasDetecEvent[0] && detec_event_index[0] == 0 && this->line_params && 
+              detec_info->track_classIds.size() == detec_info->leftOrRight.size()) {
+    double k = line_params->x;
+    double b = line_params->y;
+    bool flag = false;
+    for (int i=0; i<detec_info->track_classIds.size(); i++) {
+      if (detec_info->track_classIds[i] >= 0) {   // 同时检测车和行人
+        Point2d cur_pixel = this->getPixelPoint(detec_info->track_boxes[i], 1);
+        if (this->isInLeft(k, b, cur_pixel)) {  // 如果当前在左边，速度 > 0 为逆行
+          if (detec_info->track_speeds[i] > 0) {
+            flag = true;
+            cv::rectangle(image, detec_info->track_boxes[i], Scalar(255, 50, 50), 2);
+          }
+        } else {    // 如果当前物体在右边，那么速度 < 0 为逆行
+          if (detec_info->track_speeds[i] < 0) {
+            flag = true;
+            cv::rectangle(image, detec_info->track_boxes[i], Scalar(255, 50, 50), 2);
+          }
+        }
+      }
+    }
+    if (flag) {
+      line(image, this->p1, this->p2, Scalar(255, 0, 0), 2);
+      this->PubEventTopic(0, "交通逆行", "高", "正确", image);
+      std::cout << " 交通逆行 "  << std::endl;
+    }
+  }
 
 
   // 异常变道
@@ -340,7 +367,6 @@ void Run::detecEvent(cv::Mat &image) {
     double k = line_params->x;
     double b = line_params->y;
     bool flag = false;
-    // cv::Point2d line = this->getLineParams(this->vec_ROI[1]);
     for (int i=0; i<detec_info->track_classIds.size(); i++) {
       if (detec_info->track_classIds[i] >= 0) {     // 同时检测车和行人
         Point2d cur_pixel = this->getPixelPoint(detec_info->track_boxes[i], 1);
