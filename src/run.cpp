@@ -92,6 +92,10 @@ void Run::getParams() {
   ros::param::get("output_video_fps", this->output_video_fps);
   ros::param::get("object_detec_interval", this->object_detec_interval);
   ros::param::get("event_detec_interval", this->event_detec_interval);
+
+  ros::param::get("event_jam_speed", this->event_jam_speed);
+  ros::param::get("event_jam_threshold", this->event_jam_threshold);
+  ros::param::get("event_park_variance", this->event_park_variance);
 }
 
 
@@ -294,38 +298,33 @@ void Run::detecEvent(cv::Mat &image) {
 
   // 交通拥堵检测条件：开启事件检测，ROI区域宽度不为0
   // 事件判定条件：
-  // 1. 速度较低 < 1m/s   2. 距离近
+  // 1. 速度较低 < 1m/s   2. 密度高
   if (this->hasDetecEvent[2] && detec_event_index[2] == 0 && this->vec_ROI[2].width != 0) {
     int num = 0;
     bool flag = false;
     for (int i=0; i < detec_info->track_classIds.size(); i++) {
       // 如果物体id大于0 : car. 且速度小于10
-      if (detec_info->track_classIds[i] == 0 && abs(detec_info->track_speeds[i]) < 10) {
+      if (detec_info->track_classIds[i] > 0 && abs(detec_info->track_speeds[i]) < this->event_jam_speed) {
         // 计算检测框的质心
-        double c_x = detec_info->track_boxes[i].x + detec_info->track_boxes[i].width / 2;
-        double c_y = detec_info->track_boxes[i].y + detec_info->track_boxes[i].height / 2;
-        cv::Point2d c_point = cv::Point2d(c_x, c_y);
+        Point2f c_point = this->getPixelPoint(detec_info->track_boxes[i], 0);
         if (this->vec_ROI[2].contains(c_point)) {
           num += 1;
         }
       }
     }
-    std::cout << "event index is 2: " << num << endl; 
-    // 计算检测框对应的实际坐标的面积
-    Point2f left_top = Point2f(vec_ROI[2].x, vec_ROI[2].y);
-    Point2f right_bottom = Point2f(vec_ROI[2].x+vec_ROI[2].width, vec_ROI[2].y+vec_ROI[2].height);
-
-    Point3f real_lt = cameraToWorld(Point2f(548.0, 420.0));
-    Point3f real_rb = cameraToWorld(Point2f(798.0, 418.0));
-    // Point3f real_lt = cameraToWorld(left_top);
-    // Point3f real_rb = cameraToWorld(right_bottom);
-    // double real_width = real_rb.x - real_lt.x;
-    // double real_height = real_rb.y - real_lt.y;
-    // cout << "real_width: " << real_width << " real_height: " << real_height << " | " << real_width * real_height << endl;
-    cout << real_lt.x << " | " << real_lt.y << endl;
-    cout << real_rb.x << " | " << real_rb.y << endl;
-    if (flag) {
-      this->PubEventTopic(1, "交通拥挤", "高", "正确", image);
+    if (num > 0) {    // 如果区域内有车辆，计算车辆密度
+      // 计算检测框对应的实际坐标的面积，默认一辆车占用的空间是 20m^，
+      // 如果 面积/车辆数 < 20m^ 则认为交通拥挤
+      Point2f left_top = Point2f(vec_ROI[2].x, vec_ROI[2].y);
+      Point2f right_bottom = Point2f(vec_ROI[2].x+vec_ROI[2].width, vec_ROI[2].y+vec_ROI[2].height);
+      Point3f real_lt = cameraToWorld(left_top);
+      Point3f real_rb = cameraToWorld(right_bottom);
+      double area = abs(real_rb.x - real_lt.x) * abs(real_rb.y - real_lt.y);
+      cout << "Area: " << area << " Num: " << num << " | " << this->event_jam_threshold << endl;
+      if ((area / num) < this->event_jam_threshold) {
+        rectangle(image, this->vec_ROI[2], Scalar(255, 0, 0), 2);
+        this->PubEventTopic(1, "交通拥挤", "高", "正确", image);
+      }
     }
   }
 
@@ -336,7 +335,7 @@ void Run::detecEvent(cv::Mat &image) {
     if (this->vec_ROI[3].width == 0) {     // 默认检测整个画面
       for (int i=0; i < detec_info->track_classIds.size(); i++) {
         if (detec_info->track_classIds[i] > 0 && 
-                      this->isStatic(this->cur_track_bboxs, i)) {
+                    this->isStatic(this->cur_track_bboxs, i, this->event_park_variance)) {
           flag = true;
           cv::rectangle(image, detec_info->track_boxes[i], Scalar(255, 50, 50), 2);
         }
@@ -344,13 +343,11 @@ void Run::detecEvent(cv::Mat &image) {
     }
     else {        // 如果选择了ROI区域，在确定区域检测
       for (int i=0; i < detec_info->track_classIds.size(); i++) {
-        double c_x = detec_info->track_boxes[i].x + detec_info->track_boxes[i].width / 2;
-        double c_y = detec_info->track_boxes[i].y + detec_info->track_boxes[i].height / 2;
-        Point2d c_point = Point2d(c_x, c_y);
+        Point2f c_point = this->getPixelPoint(detec_info->track_boxes[i], 0);
         // 如果物体为车，在ROI框内，而且还是静止
         if (detec_info->track_classIds[i] > 0 && 
                   this->vec_ROI[3].contains(c_point) &&
-                  this->isStatic(this->cur_track_bboxs, i)) {
+                  this->isStatic(this->cur_track_bboxs, i, this->event_park_variance)) {
           flag = true;
           cv::rectangle(image, detec_info->track_boxes[i], Scalar(255, 50, 50), 2);
         }
@@ -377,9 +374,7 @@ void Run::detecEvent(cv::Mat &image) {
     else {    // 检测ROI区域
       for (int i=0; i < detec_info->track_classIds.size(); i++) {
         if (detec_info->track_classIds[i] == 0) {
-          double c_x = detec_info->track_boxes[i].x + detec_info->track_boxes[i].width / 2;
-          double c_y = detec_info->track_boxes[i].y + detec_info->track_boxes[i].height / 2;
-          Point2d c_point = Point2d(c_x, c_y);
+          Point2f c_point = this->getPixelPoint(detec_info->track_boxes[i], 0);
           if (this->vec_ROI[4].contains(c_point)) {
             flag = true;
             cv::rectangle(image, detec_info->track_boxes[i], Scalar(255, 50, 50), 2);
@@ -422,7 +417,8 @@ std::string Run::getCurTime() {
 }
 
 // 计算下标为index 的物体在两次检测间隔间坐标的方差，判断是否为静止
-bool Run::isStatic(vector<vector<Rect2d>> &track_boxes, int index) {
+// vari_threshold 为方差阈值，方差小于该值可认为静止
+bool Run::isStatic(vector<vector<Rect2d>> &track_boxes, int index, double vari_threshold) {
   if (track_boxes.size() == 0 || track_boxes[0].size() == 0)
     return false;
   double sum_x = 0;
@@ -441,7 +437,7 @@ bool Run::isStatic(vector<vector<Rect2d>> &track_boxes, int index) {
   double vari_x = tmp_x / track_boxes.size();
   double vari_y = tmp_y / track_boxes.size();
   // cout << "index: " << index << " | " << vari_x << " " << vari_y << endl;
-  if (vari_x < 0.1 && vari_y < 0.1) {   // 认为物体静止
+  if (vari_x < vari_threshold && vari_y < vari_threshold) {   // 认为物体静止
     return true;
   } else {
     return false;
@@ -552,6 +548,7 @@ void Run::processOD(cv::Mat &image, int interval) {
           // // 计算真实世界坐标
           cv::Point3f wd_pre = cameraToWorld(pre_pixel);
           cv::Point3f wd_cur = cameraToWorld(cur_pixel);
+          // std::cout << "index: " << i << " " << cur_pixel << " " << wd_cur << std::endl;
 
           float delta = getDistBetweenTwoDetec(i);
           float speed = delta / float(this->object_detec_interval / float(output_video_fps));

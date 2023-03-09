@@ -76,6 +76,11 @@ private:
   string srv_get_config_name;
   string srv_set_line_roi_name;
 
+  double event_jam_threshold;           // 判断交通拥堵事件的车辆密度阈值
+  double event_jam_speed;               // 交通拥堵事件的速度阈值
+
+  double event_park_variance;           // 异常停车事件速度阈值
+
   bool show_pcd = false;            // 是否在视频中显示点云
 
   vector<vector<Rect2d>> cur_track_bboxs;       // 两次检测之间跟踪算法返回的的数据
@@ -107,7 +112,7 @@ public:
   ~Run();
   std::string getCurTime();
   void getParams();
-  bool isStatic(vector<vector<Rect2d>> &track_boxes, int index);
+  bool isStatic(vector<vector<Rect2d>> &track_boxes, int index, double event_park_variance);
   void PubEventTopic(int type, std::string e_name, std::string level, 
                       std::string judge, cv::Mat &image);
   void Callback(const sensor_msgs::ImageConstPtr &msg_img,
