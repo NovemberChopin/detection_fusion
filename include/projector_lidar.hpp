@@ -60,7 +60,7 @@ public:
   void setFilterMode(bool filter_mode) { overlap_filter_ = filter_mode; }
 
   bool loadPointCloud(pcl::PointCloud<pcl::PointXYZI> pcl) {
-    oriCloud = cv::Mat(cv::Size(pcl.points.size(), 3), CV_64FC1);
+    oriCloud = cv::Mat(cv::Size(pcl.points.size(), 3), CV_32FC1);
     for (size_t i = 0; i < pcl.points.size(); ++i) {
       oriCloud.at<float>(0, i) = pcl.points[i].x;
       oriCloud.at<float>(1, i) = pcl.points[i].y;
@@ -78,6 +78,10 @@ public:
     // cv::Mat outImg = cv::Mat(img.size(), CV_32FC3);
     // cv::initUndistortRectifyMap(K, D, I, K, img.size(), CV_32FC1, mapX, mapY);
     // cv::remap(img, outImg, mapX, mapY, cv::INTER_LINEAR);
+    K.convertTo(K, CV_32FC1);
+    D.convertTo(D, CV_32FC1);
+    R.convertTo(R, CV_32FC1);
+    T.convertTo(T, CV_32FC1);
     cv::Mat outImg = img;
     cv::Mat dist = oriCloud.rowRange(0, 1).mul(oriCloud.rowRange(0, 1)) +
                    oriCloud.rowRange(1, 2).mul(oriCloud.rowRange(1, 2)) +
