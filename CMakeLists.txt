@@ -49,9 +49,11 @@ add_message_files(
 add_service_files(
   FILES
   ShowPCD.srv
+  ShowLine.srv
   SetDetecEvent.srv
   GetConfig.srv
   SetLineOrRect.srv
+  SetDetecParams.srv
 )
 
 ## Generate actions in the 'action' folder

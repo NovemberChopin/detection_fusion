@@ -55,9 +55,11 @@ Run::Run() {
   this->pub_detec_info_ = this->nh_.advertise<detection_fusion::detecInfo>(this->pub_detec_info_name, 5);
   this->pub_event_ = this->nh_.advertise<detection_fusion::EventInfo>(this->pub_event_name, 5);
   this->srv_show_pcd = this->nh_.advertiseService(this->srv_show_pcd_name, &Run::setShowPCD, this);
+  this->srv_show_line = this->nh_.advertiseService(this->srv_show_line_name, &Run::setShowLine, this);
   this->srv_set_event = this->nh_.advertiseService(this->srv_set_event_name, &Run::setDetecEvent, this);
   this->srv_get_config = this->nh_.advertiseService(this->srv_get_config_name, &Run::getConfigCallback, this);
   this->srv_set_line_roi = this->nh_.advertiseService(this->srv_set_line_roi_name, &Run::getLineOrROI, this);
+  this->srv_set_detec_params = this->nh_.advertiseService(this->srv_set_detec_params_name, &Run::setDetecParams, this);
 }
 
 
@@ -85,9 +87,11 @@ void Run::getParams() {
   ros::param::get("pub_detec_info", this->pub_detec_info_name);
   ros::param::get("pub_event", this->pub_event_name);
   ros::param::get("srv_show_pcd", this->srv_show_pcd_name);
+  ros::param::get("srv_show_line", this->srv_show_line_name);
   ros::param::get("srv_set_event", this->srv_set_event_name);
   ros::param::get("srv_get_config", this->srv_get_config_name);
   ros::param::get("srv_set_line_roi", this->srv_set_line_roi_name);
+  ros::param::get("srv_set_detec_params", this->srv_set_detec_params_name);
 
   ros::param::get("output_video_fps", this->output_video_fps);
   ros::param::get("object_detec_interval", this->object_detec_interval);
@@ -109,6 +113,30 @@ bool Run::setShowPCD(detection_fusion::ShowPCD::Request &req,        // ShowPCD 
     this->show_pcd = false;
   }
   res.status = 0;
+  return true;
+}
+
+
+bool Run::setShowLine(detection_fusion::ShowLine::Request &req,
+                  detection_fusion::ShowLine::Response &res) {
+  std::cout << "req.flag: " << req.flag << std::endl;
+  if (req.flag == "on") {
+    this->show_line = true;      // 显示点云数据
+  } else {
+    this->show_line = false;
+  }
+  return true;
+}
+
+
+bool Run::setDetecParams(detection_fusion::SetDetecParams::Request &req,
+                      detection_fusion::SetDetecParams::Response &res) {
+  std::cout << "req.type: " << req.type << " req.val: " << req.val << std::endl;
+  if (req.type == "object") {
+    this->object_detec_interval = req.val;
+  } else {
+    this->event_detec_interval = req.val;
+  }
   return true;
 }
 
@@ -194,10 +222,7 @@ void Run::Callback(const sensor_msgs::ImageConstPtr &msg_img,
     fusion_frame = fixed_img;
   }
 
-  if (this->vec_ROI[2].width != 0)
-    cv::rectangle(fusion_frame, this->vec_ROI[2], cv::Scalar(255, 0, 0), 2, 8);
-
-  if (this->p1.x != 0 && this->p1.y != 0) {
+  if (this->p1.x != 0 && this->p1.y != 0 && this->show_line) {
     cv::line(fusion_frame, this->p1, this->p2, Scalar(255, 255, 0), 2, 8);
   }
   
@@ -238,37 +263,12 @@ void Run::Callback(const sensor_msgs::ImageConstPtr &msg_img,
  * @return cv::Point3f 世界坐标
  */
 cv::Point3f Run::cameraToWorld(cv::Point2f point) {
-  // cv::Mat invR_x_invM_x_uv1, invR_x_tvec, wcPoint;
-  // double Z = 0;   // Hypothesis ground:
-
-	// cv::Mat screenCoordinates = cv::Mat::ones(3, 1, cv::DataType<double>::type);
-	// screenCoordinates.at<double>(0, 0) = point.x;
-	// screenCoordinates.at<double>(1, 0) = point.y;
-	// screenCoordinates.at<double>(2, 0) = 1; // f=1
-
-  // invR_x_invM_x_uv1.convertTo(invR_x_invM_x_uv1, CV_32FC1);
-  // invR_x_tvec.convertTo(invR_x_tvec, CV_32FC1);
-  // wcPoint.convertTo(wcPoint, CV_32FC1);
-  // screenCoordinates.convertTo(screenCoordinates, CV_32FC1);
-
-	// invR_x_invM_x_uv1 = this->rotationMatrix.inv() * this->cameraMatrix.inv() * screenCoordinates;
-  // invR_x_tvec = this->rotationMatrix.inv() * this->transVector;
-  // wcPoint = (Z + invR_x_tvec.at<double>(2, 0)) / invR_x_invM_x_uv1.at<double>(2, 0) * invR_x_invM_x_uv1 - invR_x_tvec;
-  // cv::Point3f worldCoordinates(wcPoint.at<double>(0, 0), wcPoint.at<double>(1, 0), wcPoint.at<double>(2, 0));
-  // return worldCoordinates;
-
   cv::Mat uvPoint = cv::Mat::ones(3, 1, cv::DataType<double>::type);
   uvPoint.at<double>(0, 0) = point.x;
 	uvPoint.at<double>(1, 0) = point.y;
 
   cv::Mat tempMat, tempMat2;
   cv::Mat wcPoint;
-
-  // uvPoint.convertTo(uvPoint, CV_32FC1);
-  // tempMat.convertTo(tempMat, CV_32FC1);
-  // tempMat2.convertTo(tempMat2, CV_32FC1);
-  // wcPoint.convertTo(wcPoint, CV_32FC1);
-
 
   double s, zConst = 0;
   tempMat = rotationMatrix.inv() * cameraMatrix.inv() * uvPoint;
@@ -556,37 +556,11 @@ void Run::processOD(cv::Mat &image, int interval) {
       // 如果track_boxes_pre没有数据，则表示第一次检测，所有物体速度为0
       detec_info->track_speeds = vector<float>(detec_info->track_boxes.size(), 0.0);
       detec_info->track_distances = vector<float>(detec_info->track_boxes.size(), 0.0);
-      // TODO: 这里应该使用上次非0的值
       for (int i=0; i < detec_info->track_boxes.size(); i++) {
         cv::Point3f point(0, 0, 0);
         detec_info->location.push_back(point);
       }
-      
-    } else {
-      // 只有前后两帧 bboxes 长度一样时
-      // for (int i=0; i<detec_info->track_boxes.size(); i++) {
-      //   // 这里 type=1 表示返回底部中心坐标
-      //   cv::Point2f pre_pixel = getPixelPoint(detec_info->track_boxes_pre[i], 1);
-      //   cv::Point2f cur_pixel = getPixelPoint(detec_info->track_boxes[i], 1);
-      //   // 计算真实世界坐标
-      //   cv::Point3f wd_pre = cameraToWorld(pre_pixel);
-      //   cv::Point3f wd_cur = cameraToWorld(cur_pixel);
-      //   // 計算物體速度
-      //   float delta = sqrt(pow(wd_cur.x-wd_pre.x, 2) + pow(wd_cur.y-wd_pre.y, 2));
-      //   float speed = delta / float(interval / float(this->output_video_fps));
-      //   // 計算物體離相機的距離
-      //   float dist_pre = sqrt(pow(wd_pre.x-this->camera_coord.x, 2) + 
-      //                           pow(wd_pre.y-this->camera_coord.y, 2));
-      //   float dist = sqrt(pow(wd_cur.x-this->camera_coord.x, 2) + 
-      //                           pow(wd_cur.y-this->camera_coord.y, 2));
-      //   // 定义远离相机速度为正，靠近相机速度为负
-      //   if (dist < dist_pre) {speed *= -1;}
-      //     detec_info->track_speeds.push_back(speed);
-      //     detec_info->track_distances.push_back(dist);
-      //     detec_info->location.push_back(wd_cur);
-      // }
-    }
-    
+    } 
     
     /**
      * 开启某一个事件：

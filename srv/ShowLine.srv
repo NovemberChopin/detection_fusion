@@ -1,0 +1,2 @@
+# 请求内容为string，可选值有 on 和 off: 示是否需要展示车道线
+string flag

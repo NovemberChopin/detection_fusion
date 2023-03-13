@@ -25,9 +25,11 @@
 #include "detection_fusion/detecInfo.h"
 #include "detection_fusion/EventInfo.h"
 #include "detection_fusion/ShowPCD.h"
+#include "detection_fusion/ShowLine.h"
 #include "detection_fusion/SetDetecEvent.h"
 #include "detection_fusion/GetConfig.h"
 #include "detection_fusion/SetLineOrRect.h"
+#include "detection_fusion/SetDetecParams.h"
 #include "geometry_msgs/Point.h"
 
 #include <Eigen/Core>
@@ -57,9 +59,11 @@ private:
   ros::Publisher pub_event_;                // 发布事件消息
 
   ros::ServiceServer srv_show_pcd;          // 设置点云是否可见的服务
+  ros::ServiceServer srv_show_line;         // 设置车道线是否可见的服务
   ros::ServiceServer srv_set_event;         // 设置交通事件检测是否开启
   ros::ServiceServer srv_get_config;        // 返回当前系统的设置信息
   ros::ServiceServer srv_set_line_roi;      // 设置事件检测的车道线和ROI区域
+  ros::ServiceServer srv_set_detec_params;
 
   Projector *projector;
   ObjectDetection *objectD;
@@ -73,6 +77,8 @@ private:
   string pub_detec_info_name;
   string pub_event_name;
   string srv_show_pcd_name;
+  string srv_show_line_name;
+  string srv_set_detec_params_name;
   string srv_set_event_name;
   string srv_get_config_name;
   string srv_set_line_roi_name;
@@ -83,21 +89,25 @@ private:
   double event_park_variance;           // 异常停车事件速度阈值
 
   bool show_pcd = false;            // 是否在视频中显示点云
+  bool show_line = false;           // 是否在视频中显示车道线
 
-  vector<vector<Rect2d>> cur_track_bboxs;       // 两次检测之间跟踪算法返回的的数据(ROI变化的时间序列)
+  int object_detec_interval;                      // 物体检测间隔
+  int event_detec_interval;                       // 事件检测周期（10表示进行10次物体检测后进行一次事件检测）
+
+  vector<vector<Rect2d>> cur_track_bboxs;         // 两次检测之间跟踪算法返回的的数据(ROI变化的时间序列)
 
   // 事件检测参数
   Point2d *line_params = nullptr;                                   // 车道线参数，x y 分别对应直线参数 k b
   Point2d p1 = Point2d(0, 0);
   Point2d p2 = Point2d(0, 0);
   vector<Rect2d> vec_ROI;                                           // 存储每个事件的ROI区域
-  int event_detec_interval = 10;                                    // 事件检测周期（10表示进行10次物体检测后进行一次事件检测）
+  
   std::vector<bool> hasDetecEvent = std::vector<bool>(5, false);		// 对应五种事件是否开始检测
 	std::vector<int> detec_event_index = std::vector<int>(5, -1);			// 每个事件检测的间隔
 
   // 相机参数
   int output_video_fps;                          // 视频帧率
-  int object_detec_interval;                     // 物体检测间隔
+  
   cv::Size image_size;
   // cv::Mat I = cv::Mat::eye(3, 3, CV_32FC1);
   cv::Mat mapX, mapY;
@@ -125,6 +135,10 @@ public:
   float getDistBetweenTwoDetec(int index);
   bool setShowPCD(detection_fusion::ShowPCD::Request &req,        // ShowPCD 服务回调函数
                   detection_fusion::ShowPCD::Response &res);
+  bool setShowLine(detection_fusion::ShowLine::Request &req,
+                  detection_fusion::ShowLine::Response &res);
+  bool setDetecParams(detection_fusion::SetDetecParams::Request &req,
+                      detection_fusion::SetDetecParams::Response &res);
   bool setDetecEvent(detection_fusion::SetDetecEvent::Request &req,
                       detection_fusion::SetDetecEvent::Response &res);
   bool getConfigCallback(detection_fusion::GetConfig::Request &req,

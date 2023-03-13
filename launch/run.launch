@@ -1,6 +1,5 @@
 <launch>
     <!-- EMQT: admin  password: kbw123456 -->
-    <param name="input_bag_path" value="$(find camera_lidar_calibration)/data/lidar/" />
     <!-- Calib Params -->
     <param name="camera_info" value="$(find detection_fusion)/config/camera_info.yml" />
     <param name="trans_matrix" value="$(find detection_fusion)/config/trans_matrix.yml" />
@@ -18,9 +17,11 @@
     <param name="pub_event" value="/eventInfo" />
     <!-- Service -->
     <param name="srv_show_pcd" value="show_pcd" />
+    <param name="srv_show_line" value="show_line" />
     <param name="srv_set_event" value="set_event" />
     <param name="srv_get_config" value="get_config" />
     <param name="srv_set_line_roi" value="set_line_roi" />
+    <param name="srv_set_detec_params" value="set_detec_params" />
     <!-- 检测参数 -->
     <param name="output_video_fps" type="int" value="15" />
     <param name="object_detec_interval" type="int" value="5" />
@@ -31,6 +32,7 @@
     <param name="event_jam_threshold" type="double" value="40" />
             <!-- 异常停车事件坐标的方差 -->
     <param name="event_park_variance" type="double" value="0.1" />
+    <!-- 启动节点 -->
     <node pkg="detection_fusion" type="detection_fusion_node" name="detection_fusion_node" output="screen">
     </node>
 </launch>

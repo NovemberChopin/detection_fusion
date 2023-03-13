@@ -1,0 +1,4 @@
+# type == object or event
+# 表示设置物体检测间隔或事件检测间隔
+string type
+int16 val
