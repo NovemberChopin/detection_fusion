@@ -30,6 +30,7 @@
 #include "detection_fusion/GetConfig.h"
 #include "detection_fusion/SetLineOrRect.h"
 #include "detection_fusion/SetDetecParams.h"
+#include "detection_fusion/SetTopic.h"
 #include "geometry_msgs/Point.h"
 
 #include <Eigen/Core>
@@ -51,8 +52,8 @@ class Run {
 
 private:
   ros::NodeHandle nh_;
-  message_filters::Subscriber<sensor_msgs::Image> *sub_img_;
-  message_filters::Subscriber<sensor_msgs::PointCloud2> *sub_lidar_;
+  message_filters::Subscriber<sensor_msgs::Image> *sub_img_ = nullptr;
+  message_filters::Subscriber<sensor_msgs::PointCloud2> *sub_lidar_ = nullptr;
   message_filters::Synchronizer<syncPolicy> *sync_;
   image_transport::Publisher pub_img_;
   ros::Publisher pub_detec_info_;           // 发布物体检测结果
@@ -64,6 +65,7 @@ private:
   ros::ServiceServer srv_get_config;        // 返回当前系统的设置信息
   ros::ServiceServer srv_set_line_roi;      // 设置事件检测的车道线和ROI区域
   ros::ServiceServer srv_set_detec_params;
+  ros::ServiceServer srv_set_topic;
 
   Projector *projector;
   ObjectDetection *objectD;
@@ -82,6 +84,7 @@ private:
   string srv_set_event_name;
   string srv_get_config_name;
   string srv_set_line_roi_name;
+  string srv_set_topic_name;
 
   double event_jam_threshold;           // 判断交通拥堵事件的车辆密度阈值
   double event_jam_speed;               // 交通拥堵事件的速度阈值
@@ -122,6 +125,7 @@ public:
   std::string getCurTime();
   void getParams();
   cv::Point2d getLineParams(Point2d &p1, Point2d &p2);
+  void SetTopic(string image, string lidar);
   bool isStatic(vector<vector<Rect2d>> &track_boxes, int index, double event_park_variance);
   bool isInLeft(double k, double b, Point2d point);
   void PubEventTopic(int type, std::string e_name, std::string level, 
@@ -145,5 +149,7 @@ public:
                           detection_fusion::GetConfig::Response &res);
   bool getLineOrROI(detection_fusion::SetLineOrRect::Request &req,
                     detection_fusion::SetLineOrRect::Response &res);
+  bool setTopicCallback(detection_fusion::SetTopic::Request &req,
+                    detection_fusion::SetTopic::Response &res);
 };
 

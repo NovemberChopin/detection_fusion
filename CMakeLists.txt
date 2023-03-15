@@ -54,6 +54,7 @@ add_service_files(
   GetConfig.srv
   SetLineOrRect.srv
   SetDetecParams.srv
+  SetTopic.srv
 )
 
 ## Generate actions in the 'action' folder

@@ -2,3 +2,5 @@
 ---
 bool showPCD
 bool[] eventState
+int16 objectDetec
+int16 eventDetec

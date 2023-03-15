@@ -42,13 +42,14 @@ Run::Run() {
   cv::initUndistortRectifyMap(this->cameraMatrix, this->distCoeffs, cv::Mat(), 
                       this->cameraMatrix, image_size, CV_16SC2, this->mapX, this->mapY);
 
-  this->sub_img_ = new message_filters::Subscriber<sensor_msgs::Image>(
-          this->nh_, this->camera_topic_name, 1, ros::TransportHints().tcpNoDelay());
-  this->sub_lidar_ = new message_filters::Subscriber<sensor_msgs::PointCloud2>(
-                this->nh_, this->lidar_topic_name, 1, ros::TransportHints().tcpNoDelay());
-  this->sync_ = new message_filters::Synchronizer<syncPolicy>(
-                syncPolicy(10), *sub_img_, *sub_lidar_);
-  this->sync_->registerCallback(boost::bind(&Run::Callback, this, _1, _2));
+  // this->sub_img_ = new message_filters::Subscriber<sensor_msgs::Image>(
+  //         this->nh_, this->camera_topic_name, 1, ros::TransportHints().tcpNoDelay());
+  // this->sub_lidar_ = new message_filters::Subscriber<sensor_msgs::PointCloud2>(
+  //               this->nh_, this->lidar_topic_name, 1, ros::TransportHints().tcpNoDelay());
+  // this->sync_ = new message_filters::Synchronizer<syncPolicy>(
+  //               syncPolicy(10), *sub_img_, *sub_lidar_);
+  // this->sync_->registerCallback(boost::bind(&Run::Callback, this, _1, _2));
+  this->SetTopic(this->camera_topic_name, this->lidar_topic_name);
 
   image_transport::ImageTransport it(this->nh_);
   this->pub_img_ = it.advertise(this->fusion_topic_name, 1);
@@ -60,6 +61,35 @@ Run::Run() {
   this->srv_get_config = this->nh_.advertiseService(this->srv_get_config_name, &Run::getConfigCallback, this);
   this->srv_set_line_roi = this->nh_.advertiseService(this->srv_set_line_roi_name, &Run::getLineOrROI, this);
   this->srv_set_detec_params = this->nh_.advertiseService(this->srv_set_detec_params_name, &Run::setDetecParams, this);
+  this->srv_set_topic = this->nh_.advertiseService(this->srv_set_topic_name, &Run::setTopicCallback, this);
+}
+
+
+bool Run::setTopicCallback(detection_fusion::SetTopic::Request &req,
+                    detection_fusion::SetTopic::Response &res) {
+  if (req.type == "camera") {
+    this->camera_topic_name = req.topic;
+  } else {
+    this->lidar_topic_name = req.topic;
+  }
+  this->SetTopic(this->camera_topic_name, this->lidar_topic_name);
+  return true;
+}
+
+
+void Run::SetTopic(string image, string lidar) {
+  if (this->sub_img_ != nullptr)
+    this->sub_img_->unsubscribe();
+  if (this->sub_lidar_ != nullptr)
+    this->sub_lidar_->unsubscribe();
+  std::cout << "Set Topic: " << image << " " << lidar << std::endl;
+  this->sub_img_ = new message_filters::Subscriber<sensor_msgs::Image>(
+          this->nh_, image, 1, ros::TransportHints().tcpNoDelay());
+  this->sub_lidar_ = new message_filters::Subscriber<sensor_msgs::PointCloud2>(
+                this->nh_, lidar, 1, ros::TransportHints().tcpNoDelay());
+  this->sync_ = new message_filters::Synchronizer<syncPolicy>(
+                syncPolicy(10), *sub_img_, *sub_lidar_);
+  this->sync_->registerCallback(boost::bind(&Run::Callback, this, _1, _2));
 }
 
 
@@ -92,6 +122,7 @@ void Run::getParams() {
   ros::param::get("srv_get_config", this->srv_get_config_name);
   ros::param::get("srv_set_line_roi", this->srv_set_line_roi_name);
   ros::param::get("srv_set_detec_params", this->srv_set_detec_params_name);
+  ros::param::get("srv_set_topic", this->srv_set_topic_name);
 
   ros::param::get("output_video_fps", this->output_video_fps);
   ros::param::get("object_detec_interval", this->object_detec_interval);
@@ -165,6 +196,8 @@ bool Run::setDetecEvent(detection_fusion::SetDetecEvent::Request &req,
 // 获取当前系统配置回调函数
 bool Run::getConfigCallback(detection_fusion::GetConfig::Request &req,
                           detection_fusion::GetConfig::Response &res) {
+  res.objectDetec = this->object_detec_interval;
+  res.eventDetec = this->event_detec_interval;
   res.showPCD = this->show_pcd;
   res.eventState.assign(this->hasDetecEvent.begin(), this->hasDetecEvent.end());
   return true;
