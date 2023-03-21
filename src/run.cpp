@@ -53,7 +53,7 @@ Run::Run() {
 
   image_transport::ImageTransport it(this->nh_);
   this->pub_img_ = it.advertise(this->fusion_topic_name, 1);
-  this->pub_detec_info_ = this->nh_.advertise<detection_fusion::detecInfo>(this->pub_detec_info_name, 5);
+  this->pub_detec_info_ = this->nh_.advertise<detection_fusion::DetecInfo>(this->pub_detec_info_name, 5);
   this->pub_event_ = this->nh_.advertise<detection_fusion::EventInfo>(this->pub_event_name, 5);
   this->srv_show_pcd = this->nh_.advertiseService(this->srv_show_pcd_name, &Run::setShowPCD, this);
   this->srv_show_line = this->nh_.advertiseService(this->srv_show_line_name, &Run::setShowLine, this);
@@ -266,7 +266,7 @@ void Run::Callback(const sensor_msgs::ImageConstPtr &msg_img,
   this->pub_img_.publish(pub_msg);
 
   // 发布检测结果话题
-  detection_fusion::detecInfo detecMsg;
+  detection_fusion::DetecInfo detecMsg;
   DetectionInfo *info = this->objectD->detecRes;
   for (auto id: info->track_classIds)       // 物体ID（分类）
     detecMsg.id.push_back(id);
@@ -276,13 +276,18 @@ void Run::Callback(const sensor_msgs::ImageConstPtr &msg_img,
     detecMsg.speeds.push_back(speed);
   for (auto dist: info->track_distances)    // 物体距离
     detecMsg.dist.push_back(dist);
-  for (auto lo: info->location) {           // 坐标信息
-    geometry_msgs::Point point;
-    point.x = lo.x;
-    point.y = lo.y;
-    point.z = lo.z;
-    detecMsg.location.push_back(point);
+  for (auto tmp: this->cur_track_location) {   // 循环每个时刻
+    detection_fusion::Location locationMsg;
+    for (auto object_lo: tmp) {                 // 循环每个对象
+      geometry_msgs::Point point;
+      point.x = object_lo.x;
+      point.y = object_lo.y;
+      point.z = object_lo.z;
+      locationMsg.location.push_back(point);
+    }
+    detecMsg.seq_location.push_back(locationMsg);
   }
+  
   this->pub_detec_info_.publish(detecMsg);
 
 }
@@ -614,6 +619,7 @@ void Run::processOD(cv::Mat &image, int interval) {
     // 创建跟踪算法对象
     this->objectD->CreateTracker(image);
     this->cur_track_bboxs.clear();
+    this->cur_track_location.clear();
     // 将当前检测到的Rect存入 this->cur_track_bboxs
     tmp_bboxs.clear();
     tmp_bboxs.assign(detec_info->track_boxes.begin(),
@@ -633,7 +639,7 @@ void Run::processOD(cv::Mat &image, int interval) {
       // 如果当前次迭代为该周期内最后一次跟踪
       // 1. 更新速度、距离、坐标信息
       // 2. 检测事件
-      if (this->cur_track_bboxs.size() == (this->object_detec_interval-1)) {
+      if (this->cur_track_bboxs.size() == (this->object_detec_interval)) {
         detec_info->track_distances.clear();
         detec_info->track_speeds.clear();
         detec_info->location.clear();
@@ -698,19 +704,23 @@ void Run::processOD(cv::Mat &image, int interval) {
 }
 
 
-// 根据 this->cur_track_bboxs 计算两次物体检测期间的累计距离
+// 根据 this->cur_track_bboxs 计算下标为index的物体两次检测期间运动的累计距离
 float Run::getDistBetweenTwoDetec(int index) {
+  vector<Point3d> tmp_location;         // 存储index的物体坐标的时间序列
   float total_dist = 0.0;
   // 计算第一个时刻的世界坐标
   cv::Point2f pixel = getPixelPoint(this->cur_track_bboxs[0][index], 1);
   cv::Point3f wd_pre = cameraToWorld(pixel);
+  tmp_location.push_back(wd_pre);
   for (int i=1; i<this->cur_track_bboxs.size(); i++) {
     cv::Point3f wd_cur = cameraToWorld(getPixelPoint(cur_track_bboxs[i][index], 1));
+    tmp_location.push_back(wd_cur);
     float dist = sqrt(pow(wd_cur.x-wd_pre.x, 2) + pow(wd_cur.y-wd_pre.y, 2));
     total_dist += dist;
     wd_pre.x = wd_cur.x;    // 更新 wd_pre
     wd_pre.y = wd_cur.y;
   }
+  this->cur_track_location.push_back(tmp_location);
   return total_dist;
 }
 

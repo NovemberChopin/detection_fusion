@@ -41,7 +41,8 @@ find_package(Boost REQUIRED)
 ## Generate messages in the 'msg' folder
 add_message_files(
   FILES
-  detecInfo.msg
+  DetecInfo.msg
+  Location.msg
   EventInfo.msg
 )
 
