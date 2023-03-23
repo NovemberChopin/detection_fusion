@@ -44,6 +44,7 @@ add_message_files(
   DetecInfo.msg
   Location.msg
   EventInfo.msg
+  Angle.msg
 )
 
 ## Generate services in the 'srv' folder

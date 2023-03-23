@@ -100,6 +100,25 @@ Run::~Run() {
 }
 
 
+float Run::getAngle(float x1, float y1, float x2, float y2) {
+	float angle_temp;
+	float xx, yy;
+	xx = x2 - x1;
+	yy = y2 - y1;
+	if (xx == 0.0)
+		angle_temp = PI / 2.0;
+	else
+		angle_temp = atan(fabs(yy / xx));
+	if ((xx < 0.0) && (yy >= 0.0))
+		angle_temp = PI - angle_temp;
+	else if ((xx < 0.0) && (yy < 0.0))
+		angle_temp = PI + angle_temp;
+	else if ((xx >= 0.0) && (yy < 0.0))
+		angle_temp = PI * 2.0 - angle_temp;
+	return (angle_temp);
+}
+
+
 void Run::getParams() {
   if (!ros::param::get("camera_info", this->intrinsic_path)) {
     cout << "Can not get the value of camera_info" << endl;
@@ -286,6 +305,14 @@ void Run::Callback(const sensor_msgs::ImageConstPtr &msg_img,
       locationMsg.location.push_back(point);
     }
     detecMsg.seq_location.push_back(locationMsg);
+  }
+
+  for (auto tmp: this->cur_track_angle) {
+    detection_fusion::Angle vec_angle;
+    for (auto angle: tmp) {
+      vec_angle.angle.push_back(angle);
+    }
+    detecMsg.seq_angle.push_back(vec_angle);
   }
   
   this->pub_detec_info_.publish(detecMsg);
@@ -620,6 +647,7 @@ void Run::processOD(cv::Mat &image, int interval) {
     this->objectD->CreateTracker(image);
     this->cur_track_bboxs.clear();
     this->cur_track_location.clear();
+    this->cur_track_angle.clear();
     // 将当前检测到的Rect存入 this->cur_track_bboxs
     tmp_bboxs.clear();
     tmp_bboxs.assign(detec_info->track_boxes.begin(),
@@ -707,6 +735,7 @@ void Run::processOD(cv::Mat &image, int interval) {
 // 根据 this->cur_track_bboxs 计算下标为index的物体两次检测期间运动的累计距离
 float Run::getDistBetweenTwoDetec(int index) {
   vector<Point3d> tmp_location;         // 存储index的物体坐标的时间序列
+  vector<float> tmp_angle;
   float total_dist = 0.0;
   // 计算第一个时刻的世界坐标
   cv::Point2f pixel = getPixelPoint(this->cur_track_bboxs[0][index], 1);
@@ -714,13 +743,17 @@ float Run::getDistBetweenTwoDetec(int index) {
   tmp_location.push_back(wd_pre);
   for (int i=1; i<this->cur_track_bboxs.size(); i++) {
     cv::Point3f wd_cur = cameraToWorld(getPixelPoint(cur_track_bboxs[i][index], 1));
+    
     tmp_location.push_back(wd_cur);
+    tmp_angle.push_back(getAngle(wd_pre.x, wd_pre.y, wd_cur.x, wd_cur.y) * 180 / PI);  // 计算角度
+    
     float dist = sqrt(pow(wd_cur.x-wd_pre.x, 2) + pow(wd_cur.y-wd_pre.y, 2));
     total_dist += dist;
     wd_pre.x = wd_cur.x;    // 更新 wd_pre
     wd_pre.y = wd_cur.y;
   }
   this->cur_track_location.push_back(tmp_location);
+  this->cur_track_angle.push_back(tmp_angle);
   return total_dist;
 }
 

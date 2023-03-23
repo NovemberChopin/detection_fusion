@@ -22,6 +22,7 @@
 #include "projector_lidar.hpp"
 #include "object_detection.hpp"
 
+#include "detection_fusion/Angle.h"
 #include "detection_fusion/Location.h"
 #include "detection_fusion/DetecInfo.h"
 #include "detection_fusion/EventInfo.h"
@@ -45,6 +46,8 @@ using namespace cv;
 using namespace std;
 using namespace sensor_msgs;
 using namespace message_filters;
+
+#define PI 3.1415926
 
 typedef sync_policies::ApproximateTime<sensor_msgs::Image,
                         sensor_msgs::PointCloud2>syncPolicy;
@@ -100,6 +103,7 @@ private:
 
   vector<vector<Rect2d>> cur_track_bboxs;         // 两次检测之间跟踪算法返回的的数据(ROI变化的时间序列)
   vector<vector<Point3d>> cur_track_location;     // 两次检测之间通过跟踪算法计算的物体实际位置坐标序列
+  vector<vector<float>> cur_track_angle;          // 两次检测之间通过跟踪算法计算的物体的偏航角
 
   // 事件检测参数
   Point2d *line_params = nullptr;                                   // 车道线参数，x y 分别对应直线参数 k b
@@ -153,5 +157,6 @@ public:
                     detection_fusion::SetLineOrRect::Response &res);
   bool setTopicCallback(detection_fusion::SetTopic::Request &req,
                     detection_fusion::SetTopic::Response &res);
+  float getAngle(float x1, float y1, float x2, float y2);
 };
 
